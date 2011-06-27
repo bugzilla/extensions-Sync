@@ -1,0 +1,81 @@
+[%# -*- Mode: perl; indent-tabs-mode: nil -*-                               %]
+[%#                                                                         %]
+[%# The contents of this file are subject to the Mozilla Public             %]
+[%# License Version 1.1 (the "License"); you may not use this file          %]
+[%# except in compliance with the License. You may obtain a copy of         %]
+[%# the License at http://www.mozilla.org/MPL/                              %]
+[%#                                                                         %]
+[%# Software distributed under the License is distributed on an "AS         %]
+[%# IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or              %]
+[%# implied. See the License for the specific language governing            %]
+[%# rights and limitations under the License.                               %]
+[%#                                                                         %]
+[%# The Original Code is the Sync Bugzilla Extension.                       %]
+[%#                                                                         %]
+[%# The Initial Developer of the Original Code is Gervase Markham.          %]
+[%# Portions created by the Initial Developer are Copyright (C) 2011 the    %]
+[%# Initial Developer. All Rights Reserved.                                 %]
+[%#                                                                         %]
+[%# Contributor(s):                                                         %]
+[%#   Written to the Glory of God by Gervase Markham <gerv@gerv.net>.       %]
+
+[% error_message = BLOCK %]
+  [% IF    error == '' %]
+  
+Coding error: no error tag specified.
+
+  [% ELSIF error == 'bad_user' %]
+
+Cannot log in as '[% user %]'. Perhaps this email address does not represent a valid user in this database?
+
+  [% ELSIF error == 'bad_field_value' %]
+
+Cannot get ID of value '[% value %]' in field [% field %].
+
+  [% ELSIF error == 'component_without_product' %]
+
+Attempted to get ID of component [% value %] without having a product ID set; this is not possible due to name non-uniqueness.
+
+  [% ELSIF error == 'got_update_for_unsynced_bug' %]
+
+Update was sent for bug [% bug_id %] (external ID '[% ext_id %]') but this bug is not marked as being synced.
+
+  [% ELSIF error == 'no_instruction' %]
+
+No known instruction in part of map '[% map_name %]': params are '[% params %]'.
+
+  [% ELSIF error == 'xml_creation_failed' %]
+
+We were unable to create XML. Error was: [% msg %]. Structure was: 
+[% struct %]
+
+  [% ELSIF error == 'xml_parsing_failed' %]
+
+We were unable to parse some XML
+[% IF filename %] 
+ which you can find in the file [% filename %]
+[% END %]. The XML began: '[% xml FILTER truncate(50) %]'. Error was: [% msg %]
+
+  [% ELSIF error == 'xml_validation_failed' %]
+
+Some XML failed to validate. It has been stored in the file: [% filename %]. 
+
+Error: [% message %]
+
+If this XML was an outgoing message, it has not been sent. If it was an incoming message, it has not been parsed and applied.
+
+  [% ELSE %]
+    [%# Try to find hooked error messages %]
+    [% error_message = Hook.process("errors") %]
+
+    [% IF not error_message %]
+      No error message specified for error tag [% error %].
+      Please send email to [% Param("maintainer") %] describing the steps taken
+      to obtain this message.
+    [% ELSE %]
+      [% error_message FILTER none %]
+    [% END %]
+  [% END %]
+[% END %]
+
+[% error_message FILTER trim %]

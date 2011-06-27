@@ -1,0 +1,102 @@
+[%# -*- Mode: perl; indent-tabs-mode: nil -*-                              -%]
+[%#                                                                        -%]
+[%# The contents of this file are subject to the Mozilla Public            -%]
+[%# License Version 1.1 (the "License"); you may not use this file         -%]
+[%# except in compliance with the License. You may obtain a copy of        -%]
+[%# the License at http://www.mozilla.org/MPL/                             -%]
+[%#                                                                        -%]
+[%# Software distributed under the License is distributed on an "AS        -%]
+[%# IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or             -%]
+[%# implied. See the License for the specific language governing           -%]
+[%# rights and limitations under the License.                              -%]
+[%#                                                                        -%]
+[%# The Original Code is the Sync Bugzilla Extension.                      -%]
+[%#                                                                        -%]
+[%# The Initial Developer of the Original Code is Gervase Markham.         -%]
+[%# Portions created by the Initial Developer are Copyright (C) 2011 the   -%]
+[%# Initial Developer. All Rights Reserved.                                -%]
+[%#                                                                        -%]
+[%# Contributor(s):                                                        -%]
+[%#   Written to the Glory of God by Gervase Markham <gerv@gerv.net>.      -%]
+
+[% INCLUDE global/header.html.tmpl 
+   title = "Bugzilla Sync User Guide" %]
+
+<div id="width-sanity" style="max-width: 1024px">
+
+<h1>
+  Bugzilla Sync User Guide
+</h1>
+
+<h2>For Users</h2>
+
+<h3>Sync Systems and Modes</h3>
+
+<p>The 'Sync Mode' field on a bug defines the system you are syncing with, 
+and the way the sync is done. Some remote systems have multiple ways of 
+syncing with them, perhaps corresponding to a mode where most fields are 
+mastered remotely, and a mode where most fields are mastered by Bugzilla. The 
+available Sync Modes are as follows:
+</p>
+
+[% Hook.process('sync_mode') %]
+
+<h3>Starting to Sync</h3>
+
+<p>To sync an issue, set the Sync Mode field to a value which is not "<tt>---</tt>". 
+You need to be a member of the <tt>syncers</tt> group to change this field 
+(<a href="userprefs.cgi?tab=permissions">view your permissions</a>). If you 
+are not and should be, please contact an administrator.
+Once this field has been set, it cannot be unset. If you wish to discuss
+matters and not share them with the remote party, you should open a new 
+bug.</p>
+
+<h3>Synced Fields</h3>
+
+<p>The fields synced with the remote system are different depending on the 
+system concerned.</p>
+
+[% Hook.process('fields') %]
+
+<h3>Working with Synced Bugs</h3>
+
+<p>In general, you should continue to work with synced bugs as normal, but
+assuming that fields may be shared with the remote system.</p>
+
+[% Hook.process('details') %]
+
+<h3>Viewing Remote Fields</h3>
+
+<p>You can see the values of all fields in the remote system
+by clicking the "Show remote field values for this bug" link in the
+bottom right of the bug fields.</p>
+
+<h3>Error Reporting</h3>
+
+<p>If there is a sync error of some sort, the administrators will be notified.
+Errors with individual fields will also be reported as a bug comment. Also, a
+<tt>syncerror</tt> keyword will be added. This keyword prevents further sync
+attempts. It may be possible to see from the error how to fix it; if so, fix
+it and remove the keyword to recommence syncing.</p>
+
+<h2>For Administrators</h2>
+
+<p>The Sync system has a <a href="editparams.cgi?section=sync">parameters 
+panel</a> to configure it, and most Sync plugins will have one as well.</p>
+
+<p>Most of these values will be set on installation and will not need to be 
+changed. It is possible to disable syncing globally if you wish. This would be
+a good idea if e.g. the network is down. The extension will
+automatically disable syncing if it cannot communicate with a remote system 
+for over an hour.</p>
+
+<h3>Error Reporting</h3>
+
+<p>Errors in syncing will be reported by email to all the email addresses
+in the (comma-separated) <tt>sync_error_email</tt> parameter. These must be 
+valid Bugzilla account email addresses. These errors should be 
+self-explanatory. If they are not, please contact the extension author.</p>
+
+[% Hook.process("admin_notes") %]
+
+[% INCLUDE global/footer.html.tmpl %]

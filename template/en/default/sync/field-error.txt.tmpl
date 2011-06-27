@@ -1,0 +1,74 @@
+[%# -*- Mode: perl; indent-tabs-mode: nil -*-                               %]
+[%#                                                                         %]
+[%# The contents of this file are subject to the Mozilla Public             %]
+[%# License Version 1.1 (the "License"); you may not use this file          %]
+[%# except in compliance with the License. You may obtain a copy of         %]
+[%# the License at http://www.mozilla.org/MPL/                              %]
+[%#                                                                         %]
+[%# Software distributed under the License is distributed on an "AS         %]
+[%# IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or              %]
+[%# implied. See the License for the specific language governing            %]
+[%# rights and limitations under the License.                               %]
+[%#                                                                         %]
+[%# The Original Code is the Sync Bugzilla Extension.                       %]
+[%#                                                                         %]
+[%# The Initial Developer of the Original Code is Gervase Markham.          %]
+[%# Portions created by the Initial Developer are Copyright (C) 2011 the    %]
+[%# Initial Developer. All Rights Reserved.                                 %]
+[%#                                                                         %]
+[%# Contributor(s):                                                         %]
+[%#   Written to the Glory of God by Gervase Markham <gerv@gerv.net>.       %]
+
+[% error_message = BLOCK %]
+  [% IF    error == '' %]
+  
+Coding error: no error tag specified.
+
+  [% ELSIF error == 'collision_warning' %]
+
+The field '[% field %]' has been updated in the remote system but was also recently updated by a Bugzilla user, perhaps more recently than the remote was originally made. Please check that this field has an appropriate value.
+
+Old Bugzilla value: [% old_bz %]
+New Bugzilla value: [% new_bz %]
+  New remote value: [% value %]
+
+  [% ELSIF error == 'invalid_bzvalue' %]
+
+[% bug.id ? "Bug $bug.id" : "New bug" %]: Cannot sync value '[% value %]' from field '[% field %]' in item with external ID [% ext_id %]. The full error given by Bugzilla was: [% msg %]
+
+  [% ELSIF error == 'unknown_bzvalue' %]
+
+Bug [% bug.id %]: Cannot sync unknown value '[% bzvalue %]' into field '[% bzfield %]'.
+[% IF value.defined %]
+The value '[% value %]' has been used.
+[% ELSE %]
+This field will not be sent to the remote system.
+[% END %]
+
+  [% ELSIF error == 'unknown_bzvalue_bad_map' %]
+
+Bug [% bug.id %]: Cannot sync unknown value '[% value %]' into field '[% bzfield %]', and there is no default value or error value available to use. This field will not be sent to the remote system.
+
+  [% ELSIF error == 'unknown_value' %]
+
+Issue [% ext_id %]: Cannot sync unknown value '[% value %]' in field '[% field %]'. The value '[% bzvalue %]' has been used.
+
+  [% ELSIF error == 'unknown_value_bad_map' %]
+
+Issue [% ext_id %]: Cannot sync unknown value '[% value %]' from field '[% field %]', and there is no default value or error value available to use. This field has not been synced.
+
+  [% ELSE %]
+    [%# Try to find hooked error messages %]
+    [% error_message = Hook.process("errors") %]
+
+    [% IF not error_message %]
+      No error message specified for error tag [% error %].
+      Please send email to [% Param("maintainer") %] describing the steps taken
+      to obtain this message.
+    [% ELSE %]
+      [% error_message FILTER none %]
+    [% END %]
+  [% END %]
+[% END %]
+
+[% error_message FILTER trim %]

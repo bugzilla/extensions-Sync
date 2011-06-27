@@ -1,0 +1,9 @@
+Configuration
+-------------
+
+Once you have installed this software and run checksetup.pl successfully,
+you need to manually configure Bugzilla by hand in the following ways:
+
+* Configure cf_sync_data to only appear in really unlikely 
+  circumstances (e.g. when Product is set to 'Trash'). This is easier then
+  hiding them completely, and allows them to be re-shown for debugging.

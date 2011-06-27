@@ -1,0 +1,87 @@
+[%# -*- Mode: perl; indent-tabs-mode: nil -*-                               %]
+[%#                                                                         %]
+[%# The contents of this file are subject to the Mozilla Public             %]
+[%# License Version 1.1 (the "License"); you may not use this file          %]
+[%# except in compliance with the License. You may obtain a copy of         %]
+[%# the License at http://www.mozilla.org/MPL/                              %]
+[%#                                                                         %]
+[%# Software distributed under the License is distributed on an "AS         %]
+[%# IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or              %]
+[%# implied. See the License for the specific language governing            %]
+[%# rights and limitations under the License.                               %]
+[%#                                                                         %]
+[%# The Original Code is the Sync Bugzilla Extension.                       %]
+[%#                                                                         %]
+[%# The Initial Developer of the Original Code is Gervase Markham.          %]
+[%# Portions created by the Initial Developer are Copyright (C) 2011 the    %]
+[%# Initial Developer. All Rights Reserved.                                 %]
+[%#                                                                         %]
+[%# Contributor(s):                                                         %]
+[%#   Written to the Glory of God by Gervase Markham <gerv@gerv.net>.       %]
+
+[% title = BLOCK %]
+[% bug.sync_system %] fields for bug [% bug.id %]
+[% END %]
+
+[% INCLUDE global/header.html.tmpl title = title %]
+
+<h2>
+  [% bug.sync_system %] fields for 
+  <a href="show_bug.cgi?id=[% bug.id FILTER html %]">bug 
+  [% bug.id FILTER html %]</a>:
+</h2>
+
+[% VIEW xml %]
+
+   [% BLOCK text %]
+      [% item FILTER html FILTER html_line_break %]
+   [% END %]
+
+   [% BLOCK hash %]
+      <ul>
+      [% FOREACH key = item.keys.sort -%]
+        [% IF item.$key.size %]
+          [% IF ref(item.$key) == "ARRAY" %]
+            [% FOREACH thing = item.$key.sort %]
+              <li>
+                [% key FILTER html %] => 
+                [% view.print(thing) %]
+              </li>
+            [% END %]
+          [% ELSE %]
+            <li>
+              [% key FILTER html %] => [% view.print(item.$key) %]
+            </li>        
+          [% END %]
+        [% END %]
+      [% END -%]
+      </ul>     
+   [% END %]
+
+   [% BLOCK list %]
+     <ul>
+      [% FOREACH thing = item.sort %][% view.print(thing) %][% END %]
+     </ul>
+   [% END %]
+
+[% END %]
+
+[% IF bug.sync_data.size %]
+
+  <tt>
+  [% xml.print(bug.sync_data) %]
+  </tt>
+  <p>(Note: these are the values sent most recently. They may have changed 
+  since we last received an update.)</p>
+
+[% ELSIF NOT bug.is_syncing %]
+
+  <p><i>This bug is not currently set to sync.</i></p>
+
+[% ELSE %]
+
+  <p><i>No data received.</i></p>
+
+[% END %]
+
+[% INCLUDE global/footer.html.tmpl %]

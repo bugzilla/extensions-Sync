@@ -1,0 +1,58 @@
+[%# -*- Mode: perl; indent-tabs-mode: nil -*-                               %]
+[%#                                                                         %]
+[%# The contents of this file are subject to the Mozilla Public             %]
+[%# License Version 1.1 (the "License"); you may not use this file          %]
+[%# except in compliance with the License. You may obtain a copy of         %]
+[%# the License at http://www.mozilla.org/MPL/                              %]
+[%#                                                                         %]
+[%# Software distributed under the License is distributed on an "AS         %]
+[%# IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or              %]
+[%# implied. See the License for the specific language governing            %]
+[%# rights and limitations under the License.                               %]
+[%#                                                                         %]
+[%# The Original Code is the Sync Bugzilla Extension.                       %]
+[%#                                                                         %]
+[%# The Initial Developer of the Original Code is Gervase Markham.          %]
+[%# Portions created by the Initial Developer are Copyright (C) 2011 the    %]
+[%# Initial Developer. All Rights Reserved.                                 %]
+[%#                                                                         %]
+[%# Contributor(s):                                                         %]
+[%#   Written to the Glory of God by Gervase Markham <gerv@gerv.net>.       %]
+
+[% error_message = BLOCK %]
+  [% IF    error == '' %]
+  
+Coding error: no error tag specified.
+
+  [% ELSE %]
+
+    [%# Try to find hooked error messages %]
+    [% error_message = Hook.process("errors") %]
+
+    [% IF not error_message %]
+      No error message specified for error tag [% error %].
+      Please send email to [% Param("maintainer") %] describing the steps taken
+      to obtain this message.
+    [% ELSE %]
+      [% error_message FILTER none %]
+    [% END %]
+  [% END %]
+Error message was: [% response.status_line %].
+[% END %]
+
+
+[% action_message = BLOCK %]
+  [% IF fatal %]
+
+No retries left. Syncing has been disabled. 
+
+  [% ELSIF NOT completed %]
+
+This has now failed [% job.failures + 1 %] time(s). I will retry.
+
+  [% END %]
+[% END %]
+
+[% error_message FILTER trim %]
+
+[%+ action_message FILTER trim %]
