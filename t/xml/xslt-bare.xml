@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MSR-ISSUE xmlns="" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="msr-issue_2_1_0_rc4.xsd">
+      <SHORT-NAME>Initech</SHORT-NAME>
+      <CATEGORY>problem</CATEGORY>
+      <COMPANIES>
+            <COMPANY ID="Initech" ROLE="manufacturer">
+                  <LONG-NAME>Initech Corporation</LONG-NAME>
+                  <SHORT-NAME>Initech</SHORT-NAME>
+                  <TEAM-MEMBERS>
+                        <TEAM-MEMBER ID="team2">
+                              <LONG-NAME>Bloggs, Fred</LONG-NAME>
+                              <SHORT-NAME>Bloggs, Fred</SHORT-NAME>
+                              <DEPARTMENT></DEPARTMENT>
+                              <PHONE></PHONE>
+                              <EMAIL>fred.bloggs@initech.com</EMAIL>
+                        </TEAM-MEMBER>
+                        <TEAM-MEMBER ID="team5">
+                              <LONG-NAME>Joe Public</LONG-NAME>
+                              <SHORT-NAME>Joe Public</SHORT-NAME>
+                              <DEPARTMENT></DEPARTMENT>
+                              <PHONE></PHONE>
+                              <EMAIL>joe.public@partner.initech.com</EMAIL>
+                        </TEAM-MEMBER>
+                        <TEAM-MEMBER ID="team1">
+                              <LONG-NAME>admin</LONG-NAME>
+                              <SHORT-NAME>admin</SHORT-NAME>
+                              <DEPARTMENT></DEPARTMENT>
+                              <PHONE></PHONE>
+                              <EMAIL></EMAIL>
+                        </TEAM-MEMBER>
+                        <TEAM-MEMBER ID="team3">
+                              <LONG-NAME></LONG-NAME>
+                              <SHORT-NAME></SHORT-NAME>
+                              <DEPARTMENT></DEPARTMENT>
+                              <PHONE></PHONE>
+                              <EMAIL></EMAIL>
+                        </TEAM-MEMBER>
+                  </TEAM-MEMBERS>
+            </COMPANY>
+            <COMPANY ID="WernhamHogg" ROLE="supplier">
+                  <LONG-NAME>WernhamHogg</LONG-NAME>
+                  <SHORT-NAME>WernhamHogg</SHORT-NAME>
+                  <TEAM-MEMBERS>
+                        <TEAM-MEMBER ID="team6">
+                              <LONG-NAME>George Formby</LONG-NAME>
+                              <SHORT-NAME>George Formby</SHORT-NAME>
+                              <DEPARTMENT></DEPARTMENT>
+                              <PHONE></PHONE>
+                              <EMAIL></EMAIL>
+                        </TEAM-MEMBER>
+                        <TEAM-MEMBER ID="team4">
+                              <LONG-NAME>Ernie Wise</LONG-NAME>
+                              <SHORT-NAME>Ernie Wise</SHORT-NAME>
+                              <DEPARTMENT></DEPARTMENT>
+                              <PHONE></PHONE>
+                              <EMAIL></EMAIL>
+                        </TEAM-MEMBER>
+                  </TEAM-MEMBERS>
+            </COMPANY>
+      </COMPANIES>
+      <ADMIN-DATA>
+            <DOC-REVISIONS>
+                  <DOC-REVISION>
+                        <TEAM-MEMBER-REF SI="transfer" ID-REF="team2"></TEAM-MEMBER-REF>
+                        <DATE>2006-01-31T17:54:06</DATE>
+                  </DOC-REVISION>
+            </DOC-REVISIONS>
+      </ADMIN-DATA>
+      <ISSUES>
+            <ISSUE ID="ISSUE-1">
+                  <LONG-NAME></LONG-NAME>
+                  <SHORT-NAME>34</SHORT-NAME>
+                  <ISSUE-DESC>
+                        <P SI="description"></P>
+                        <P SI="category-1"></P>
+                        <P SI="category-2"></P>
+                        <P SI="category-3"></P>
+                        <P SI="error-occurrence"></P>
+                        <P SI="occurrence-milestone"></P>
+                        <P SI="recorded-date"></P>
+                        <P SI="Initech-comments"></P>
+                        <P SI="supplierTracking"></P>
+                        <P SI="attachmentlist">
+                              <TT SI="attachment" TYPE="OTHER">BUG_34_chars.csv:b4a135265a1c567c84c26a08a2e94754</TT>
+                              <TT SI="attachment" TYPE="OTHER">BUG_34_notification.log:4a34b31c2ff861863fa5ead369cdad54</TT>
+                              <TT SI="attachment" TYPE="OTHER">BUG_34_chars1.csv:b4a135265a1c567c84c26a08a2e94754</TT>
+                        </P>
+                        <P SI="attachment"></P>
+                  </ISSUE-DESC>
+                  <COMPANY-ISSUE-INFOS>
+                        <COMPANY-ISSUE-INFO SI="database id">
+                              <COMPANY-REF ID-REF="Initech">Initech</COMPANY-REF>
+                              <ISSUE-ID SI="WernhamHogg_t_EI"></ISSUE-ID>
+                        </COMPANY-ISSUE-INFO>
+                        <COMPANY-ISSUE-INFO SI="role">
+                              <COMPANY-REF ID-REF="Initech">Initech</COMPANY-REF>
+                              <TEAM-MEMBER-REF SI="finder" ID-REF="team1"></TEAM-MEMBER-REF>
+                        </COMPANY-ISSUE-INFO>
+                        <COMPANY-ISSUE-INFO SI="role">
+                              <COMPANY-REF ID-REF="Initech">Initech</COMPANY-REF>
+                              <TEAM-MEMBER-REF SI="recorder" ID-REF="team1"></TEAM-MEMBER-REF>
+                        </COMPANY-ISSUE-INFO>
+                        <COMPANY-ISSUE-INFO SI="role">
+                              <COMPANY-REF ID-REF="Initech">Initech</COMPANY-REF>
+                              <TEAM-MEMBER-REF SI="analysis" ID-REF="team3"></TEAM-MEMBER-REF>
+                        </COMPANY-ISSUE-INFO>
+                        <COMPANY-ISSUE-INFO SI="role">
+                              <COMPANY-REF ID-REF="Initech">Initech</COMPANY-REF>
+                              <TEAM-MEMBER-REF SI="responsible" ID-REF="team2"></TEAM-MEMBER-REF>
+                        </COMPANY-ISSUE-INFO>
+                        <COMPANY-ISSUE-INFO SI="database id">
+                              <COMPANY-REF ID-REF="WernhamHogg">WernhamHogg</COMPANY-REF>
+                              <ISSUE-ID SI="WernhamHogg"></ISSUE-ID>
+                        </COMPANY-ISSUE-INFO>
+                        <COMPANY-ISSUE-INFO SI="role">
+                              <COMPANY-REF ID-REF="WernhamHogg">WernhamHogg</COMPANY-REF>
+                              <TEAM-MEMBER-REF SI="responsible" ID-REF="team4"></TEAM-MEMBER-REF>
+                        </COMPANY-ISSUE-INFO>
+                  </COMPANY-ISSUE-INFOS>
+                  <ISSUE-PLANNING-INFOS>
+                        <ISSUE-CURRENT-STATE>
+                              <DATE SI="last update"></DATE>
+                              <ISSUE-STATE SI="status-Initech"></ISSUE-STATE>
+                        </ISSUE-CURRENT-STATE>
+                        <ISSUE-SEVERITY SI=""></ISSUE-SEVERITY>
+                        <DELIVERY-DATE></DELIVERY-DATE>
+                        <DELIVERY-MILESTONE></DELIVERY-MILESTONE>
+                  </ISSUE-PLANNING-INFOS>
+                  <ISSUE-ENVIRONMENT>
+                        <PROJECT-IDS>
+                              <PROJECT-ID SI="model involved"></PROJECT-ID>
+                        </PROJECT-IDS>
+                        <ENGINEERING-OBJECTS>
+                              <ENGINEERING-OBJECT>
+                                    <SHORT-LABEL></SHORT-LABEL>
+                                    <CATEGORY>assigned ecu</CATEGORY>
+                                    <SDGS>
+                                          <SDG GID="versioning">
+                                                <SD GID="hw version"></SD>
+                                                <SD GID="sw version"></SD>
+                                          </SDG>
+                                          <SDG GID="variants">
+                                                <SD GID="ECU variant"></SD>
+                                          </SDG>
+                                    </SDGS>
+                              </ENGINEERING-OBJECT>
+                              <ENGINEERING-OBJECT>
+                                    <SHORT-LABEL></SHORT-LABEL>
+                                    <CATEGORY>affected ecu</CATEGORY>
+                                    <SDGS>
+                                          <SDG GID="versioning">
+                                                <SD GID="hw version"></SD>
+                                                <SD GID="sw version"></SD>
+                                          </SDG>
+                                    </SDGS>
+                              </ENGINEERING-OBJECT>
+                        </ENGINEERING-OBJECTS>
+                  </ISSUE-ENVIRONMENT>
+                  <ISSUE-SOLUTIONS>
+                        <ISSUE-SOLUTION>
+                              <ISSUE-SOLUTION-DESC>
+                                    <P SI="feedback"></P>
+                                    <P SI="committed-date"></P>
+                                    <P SI="planned-closing-version"></P>
+                                    <P SI="closed-in-version"></P>
+                                    <P SI="status"></P>
+                                    <P SI="attachment"></P>
+                              </ISSUE-SOLUTION-DESC>
+                        </ISSUE-SOLUTION>
+                  </ISSUE-SOLUTIONS>
+            </ISSUE>
+      </ISSUES>
+</MSR-ISSUE>
+

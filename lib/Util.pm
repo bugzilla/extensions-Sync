@@ -27,17 +27,12 @@ our @EXPORT = qw(
     error
     field_error
     sync_problem
-    get_error_email_ids
-
-    get_or_create_user
-
-    update_bug_field_directly
-
+    log_data
+        
+    store_sync_data
     find_setter
     get_bug_for
-    
-    log_data
-    
+    get_or_create_user
     get_default_component_owner
 );
 
@@ -54,9 +49,9 @@ use Cwd qw(realpath);
 sub error {
     my ($error, $vars) = @_;
 
-    my $msg = get_message("error", $error, $vars);
+    my $msg = _get_message("error", $error, $vars);
 
-    record_error_message($msg);
+    _record_error_message($msg);
 }
 
 # Call when a particular field cannot be synced but the rest of the bug is OK.
@@ -65,9 +60,9 @@ sub field_error {
     my ($error, $bug, $vars) = @_;
 
     $vars->{'bug'} = $bug;
-    my $msg = get_message("field-error", $error, $vars);
+    my $msg = _get_message("field-error", $error, $vars);
 
-    record_error_message($msg);
+    _record_error_message($msg);
 
     my $dbh = Bugzilla->dbh;
     my $timestamp = $dbh->selectrow_array("SELECT LOCALTIMESTAMP(0)");
@@ -94,12 +89,12 @@ sub sync_problem {
         }
     }
 
-    my $msg = get_message("sync-error", $error, $vars);
+    my $msg = _get_message("sync-error", $error, $vars);
 
-    record_error_message($msg);
+    _record_error_message($msg);
 }
 
-sub get_message {
+sub _get_message {
     my ($template_name, $error, $vars) = @_;
 
     my $template = Bugzilla->template;
@@ -110,7 +105,7 @@ sub get_message {
     return $msg;
 }
 
-sub record_error_message {
+sub _record_error_message {
     my ($msg) = @_;
 
     if (Bugzilla->params->{'sync_debug'}) {
@@ -131,16 +126,6 @@ sub record_error_message {
     $template->process("sync/email.txt.tmpl", $vars, \$email);
 
     MessageToMTA($email);
-}
-
-sub get_error_email_ids {
-    my @emails = split(/\s*,\s*/, Bugzilla->params->{'sync_error_email'});
-    my @ids = ();
-    foreach my $email (@emails) {
-        push (@ids, login_to_id($email));
-    }
-
-    return @ids;
 }
 
 sub get_or_create_user {
@@ -174,11 +159,17 @@ sub get_or_create_user {
     return $user;
 }
 
-sub update_bug_field_directly {
-    my ($bug_id, $field, $value) = @_;
+# Store sync data and update timestamp. This happens every update, so we do it 
+# directly to avoid regular mid-airs. Users cannot change this field, so that's
+# OK.
+sub store_sync_data {
+    my ($bug_id, $data) = @_;
     my $dbh = Bugzilla->dbh;
-    $dbh->do("UPDATE bugs SET $field = ? WHERE bug_id = ?", undef,
-             $value, $bug_id);
+    $dbh->do("UPDATE bugs 
+              SET cf_sync_data = ?, 
+                  cf_sync_delta_ts = NOW() 
+              WHERE bug_id = ?", 
+              undef, $data, $bug_id);
 }
 
 my $setters = {
@@ -186,8 +177,9 @@ my $setters = {
     rep_platform => 'set_platform',
     short_desc   => 'set_summary',
     bug_file_loc => 'set_url',
-    product      => sub { return set_from_name($_[0], 'product', $_[1]) },
-    component    => sub { return set_from_name($_[0], 'component', $_[1]) },
+    bug_status   => sub { $_[0]->{'bug_status'} = $_[1]; },
+    product      => sub { return _set_from_name($_[0], 'product', $_[1]) },
+    component    => sub { return _set_from_name($_[0], 'component', $_[1]) },
 };
 
 # Work out which function to call to set a particular value on a bug, and
@@ -222,7 +214,7 @@ sub find_setter {
 }
 
 # Find the ID of the product or component ($field) with value $value.
-sub set_from_name {
+sub _set_from_name {
     my ($bug, $field, $value) = @_;
     my $dbh = Bugzilla->dbh;
     
@@ -324,20 +316,108 @@ sub get_default_component_owner {
 
     # Fill in from initial owner of selected component
     my $dbh = Bugzilla->dbh;
-    my $io = $dbh->selectrow_arrayref("SELECT login_name, realname
-                                       FROM profiles, components AS cmp
-                                       WHERE profiles.userid = cmp.initialowner
-                                       AND cmp.id = ?",
+    my $io_id = $dbh->selectrow_array("SELECT initialowner
+                                       FROM components 
+                                       WHERE components.id = ?",
                                        undef, $component_id);
-    # Every component has a default owner, so we will get an value returned.
-    # But remember realname is optional.
-    my %owner;
-    tie (%owner, 'Tie::IxHash',
-        'realname' => $io->[1] || $io->[0],
-        'email'    => $io->[0]
-    );
+    my $user = new Bugzilla::User($io_id);
 
-    return \%owner;
+    return $user;
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+Bugzilla::Extension::Sync::Util - a grab-bag of useful functions for 
+                                  implementing Sync extensions.
+
+=head1 SYNOPSIS
+
+None yet.
+  
+=head1 DESCRIPTION
+
+This package provides a load of useful functions for implementing Sync
+extensions. This documentation is currently just an overview; you'll need to 
+read the code to see exact parameters and return values.
+
+=head2 error
+
+Call this if you have a general error.
+
+You can add additional error tags and corresponding messages using template 
+hooks.
+
+=head2 field_error
+
+Call this if you have an error syncing a particular field. It will post a
+comment to the bug, but the sync can continue.
+
+Note that you must call $bug->update() at some point after calling this 
+function.
+
+You can add additional error tags and corresponding messages using template 
+hooks.
+
+=head2 sync_problem
+
+Call this if you have a general problem exchanging data with a remote system.
+It will issue a warning, and eventually give up and disable sync. This function
+is designed for people using the JobQueue API to make their communications
+asynchronous, and uses its inbuilt retry support to decide when to give up 
+and disable sync.
+
+=head2 get_or_create_user
+
+Pass in either "Name" or "Email" parameters and this function will try and
+find a matching user. If it can't find one, it will create one - with a made-up
+invalid email address if necessary. Either way, it returns a L<Bugzilla::User>
+object.
+
+This is useful if you want to use a model of changes in Bugzilla appearing to
+be made by the same people who actually made them in the remote system, and so
+need an account for each user of the remote system which makes such a change,
+but don't want to have to create them all in advance.
+
+=head2 update_bug_field_directly
+
+A convenience method to update a field in a bug directly in the database,
+without going through a Bug object. Use with care!
+
+=head2 find_setter
+
+This function tells you what function to call to set a particular field on a 
+bug. It knows about custom fields, and about some special cases where the setter
+function is not named after the field.
+
+=head2 get_bug_for
+
+Given a bug ID and an external ID, returns a Bug object. If the bug ID already
+exists, it'll be an object for that ID. If it doesn't, it'll be a "shell" 
+object, with $bug->id == 0, but which can be used in place of a normal bug
+object in functions which update and change bugs. Eventually, you can pass it
+as a parameter to Bug->create() and you'll get a real bug back, with an ID
+and an entry in the database.
+
+This is useful to make a lot of code common between the cases where it's the
+first time you've seen a bug coming from the remote system, and subsequent
+times.
+    
+=head2 log_data
+
+A convenience function to log some sync data to a file with a sensible name.
+Data goes to $BUGZILLA_HOME/extensions/Sync/log. 
+
+=head2 get_default_component_owner
+
+Returns details about the owner of the selected component. Should probably
+return a L<Bugzilla::User> object, but doesn't.
+
+=head1 LICENSE
+
+This software is available under the Mozilla Public License 1.1.
+
+=cut

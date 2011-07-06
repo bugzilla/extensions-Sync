@@ -19,56 +19,6 @@
 # Contributor(s):
 #   Written to the Glory of God by Gervase Markham <gerv@gerv.net>.
 
-################################################################################
-# This file has functions for generically mapping bugs to and from other
-# arbitrary data structures (which can then be serialized and sent to a remote
-# system).
-#
-# There is a function for mapping external data to bugs (map_external_to_bug)
-# and one for mapping bugs to external data (map_bug_to_external). Each of
-# them takes parameters of the input data, plus a map. The map is a data
-# structure which defines how the mapping is done, as follows.
-#
-# In general, hash keys are mapped to themselves, arrays become arrays, but
-# where there is an array element or hash value which is itself a hash, the
-# contents of it are used as instructions on how to get a data value to 
-# put in that place.
-#
-# Particular keys and values trigger particular behaviours:
-#
-# - "undef" means "do nothing with this field" - either ignore it on arrival,
-#   or do not set it on sending.
-# - "field:" means "map it to this field..."
-# - "map:" means "...and, when doing so, use this value mapping"
-#   (if no map is specified, the value is simply copied directly)
-#   Within the map:
-#   - A normal key/value pair does exactly what you would expect
-#   - "_default:" means "use this value if none is supplied"
-#   - "_error:" means "use this value if none is supplied, but that's something
-#     which shouldn't happen, so record the fact"
-# - "literal:" means "use this exact value every time"
-# - "newbugonly" means "do this action only for bugs we are seeing for the 
-#   first time
-# - "collisionwarning" means "have a go at working out if the sync delays 
-#   may mean this value has been updated on both sides simultaneously, and
-#   if so, warn the Bugzilla users by adding a comment"
-# - "function:" means "call this function because we need special processing 
-#   which is more complicated than any of the set options"
-#
-# The callback functions have a set interface, which is different for the
-# two different maps. 
-# 
-# map_external_to_bug's callback functions work as follows: 
-#   Params - bug
-#          - value of appropriate field in the external data 
-#   Return - nothing; function should update the bug
-#
-# map_bug_to_external's callback functions work as follows: 
-#   Params - bug
-#   Return - the value which should be placed in the field to which the function
-#            relates.
-################################################################################
-
 package Bugzilla::Extension::Sync::Mapper;
 use strict;
 use base qw(Exporter);
@@ -145,7 +95,7 @@ sub map_bug_to_external {
             else {
                 # Coding error - unknown instructions in Mapping.pm
                 error("no_instruction", { 
-                    params   => Dumper($params),
+                    params   => $params,
                     map_name => $map->{'-name'} 
                 });
             }
@@ -285,10 +235,12 @@ sub map_external_to_bug {
                 
                 if ($@) {
                     field_error('invalid_bzvalue', $bug, {
-                        ext_id => $ext_id,
-                        field  => $field,
-                        value  => $value,
-                        msg    => $@
+                        ext_id   => $ext_id,
+                        field    => $field,
+                        bzfield  => $bzfield,
+                        value    => $value,
+                        newvalue => $newvalue,
+                        msg      => $@
                     });
                 }                
             }
@@ -391,3 +343,127 @@ sub maybe_collision_warning {
 }
 
 1;
+
+=head1 NAME
+
+Bugzilla::Extension::Sync::Mapper - maps bugs to and from other data structures.
+
+=head1 DESCRIPTION
+
+This class has functions for generically mapping bugs to and from other
+arbitrary data structures (which can then be serialized and sent to a remote
+system).
+
+=head1 SYNOPSIS
+
+  my $bug = get_bug_for($bug_id, $SYSTEM, $remote_id);
+  
+  $bug = map_external_to_bug($extdata, $bug, $map, $remote_id);
+
+  ...
+  
+  my $bug = new Bugzilla::Bug(1);
+  
+  map_bug_to_external($bug, $map);
+    
+=head1 DESCRIPTION
+
+=head2 Mapping
+
+The two main functions in this package take as one of their arguments a map,
+which defines how the mapping is to be done from bug fields to external 
+structure fields, or vice versa.
+
+The map is a hash. The keys are the "names" for each field, and the values
+are either C<undef>, which means "do nothing with this field", or some 
+commands. The two functions in this case are not quite identical, because
+map_bug_to_external uses Bugzilla::Util::Sync::S objects to contain its 
+commands, while map_external_to_bug uses plain hashes. This anomaly may be
+rectified in the future.
+
+Within the hash or object, particular keys and values trigger particular 
+behaviours:
+
+=over
+
+=item C<undef> 
+
+This means "do nothing with this field" - either ignore it on arrival, or do 
+not set it on sending.
+
+=item C<field>
+
+This means "copy to/from the field which is the value for this key".
+
+=item C<map>
+
+This means "...and, when doing so, use this value mapping". Within the map:
+
+=over
+
+=item * A normal key/value pair does exactly what you would expect
+
+=item * C<_default> means "use this value if none is supplied"
+
+=item * C<_error> means "use this value if none is supplied, but that's something 
+which shouldn't happen, so record the fact"
+
+=back
+
+=item C<literal>
+
+This means "use the value of this key, literally, every time".
+
+=item C<newbugonly>
+
+This means "do this action only for bugs we are seeing for the first time."
+
+=item C<collisionwarning>
+
+This means "Work out if the sync delays mean this value has been updated on 
+both sides simultaneously, and if so, warn the Bugzilla users by adding a 
+comment"
+
+=item C<function>
+
+This means "call this function because we need special processing which is 
+more complicated than any of the set options". The callback functions have a 
+set interface, which is different for the two different maps. 
+ 
+map_external_to_bug's callback functions work as follows: 
+  Params - bug
+         - value of appropriate field in the external data 
+  Return - nothing; function should update the bug
+  
+map_bug_to_external's callback functions work as follows: 
+  Params - bug
+  Return - the value which should be placed in the field to which the function
+           relates.
+
+=back
+
+=head3 Example
+
+XXX
+
+=head2 Methods
+
+=over
+
+=item C<map_external_to_bug>
+
+This function maps external data to bug fields. One of its parameters is a 
+'map', which is a data structure which defines how the mapping is done, as 
+follows.
+
+=item C<map_bug_to_external>
+
+XXX
+
+=back
+
+=head1 LICENSE
+
+This software is available under the Mozilla Public License 1.1.
+
+=cut

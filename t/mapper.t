@@ -37,7 +37,7 @@ use Bugzilla;
 use Bugzilla::Extension::Sync::Util;
 use Bugzilla::Extension::Sync::Mapper;
 use Bugzilla::Extension::Sync::S;
-use MockBug;
+use Bugzilla::Extension::Sync::Test::MockBug;
 use Tie::IxHash;
 use Test::Exception;
 
@@ -46,8 +46,9 @@ use Test::Exception;
 local *Bugzilla::Extension::Sync::Mapper::field_error = sub { die $_[0]; };
 local *Bugzilla::Extension::Sync::Mapper::error = sub { die $_[0]; };
 
-# Magic incantation so we can use a short name
+# Magic incantations so we can use a short name
 *S:: = \*Bugzilla::Extension::Sync::S::;
+*MockBug:: = \*Bugzilla::Extension::Sync::Test::MockBug::;
 
 test_map_bug_to_external();
 test_map_external_to_bug();

@@ -44,6 +44,10 @@ Update was sent for bug [% bug_id %] (external ID '[% ext_id %]') but this bug i
 
 No known instruction in part of map '[% map_name %]': params are '[% params %]'.
 
+  [% ELSIF error == 'no_xpath_for_key' %]
+
+No XPath is given in the XPath map for the key [% key %].
+
   [% ELSIF error == 'xml_creation_failed' %]
 
 We were unable to create XML. Error was: [% msg %]. Structure was: 

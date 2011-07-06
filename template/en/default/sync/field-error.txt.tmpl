@@ -34,7 +34,7 @@ New Bugzilla value: [% new_bz %]
 
   [% ELSIF error == 'invalid_bzvalue' %]
 
-[% bug.id ? "Bug $bug.id" : "New bug" %]: Cannot sync value '[% value %]' from field '[% field %]' in item with external ID [% ext_id %]. The full error given by Bugzilla was: [% msg %]
+[% bug.id ? "Bug $bug.id" : "New bug" %]: Cannot sync value '[% value %]' from external field '[% field %]' to value '[% newvalue %]' in Bugzilla field '[% bzfield %]'. Bug's external ID is [% ext_id %]. The full error given by Bugzilla was: [% msg %]
 
   [% ELSIF error == 'unknown_bzvalue' %]
 

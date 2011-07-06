@@ -67,7 +67,9 @@ sub add_sync_mode {
 
     my $field = new Bugzilla::Field({name => 'cf_sync_mode'});
     my $matches = Bugzilla::Field::Choice->type($field)->match({
-                                                             value => $value });
+        value => $value
+    });
+    
     if (!scalar(@$matches)) {
         my $created_value = Bugzilla::Field::Choice->type($field)->create({
             value => $value
@@ -85,3 +87,137 @@ sub register_sync_data_parser {
 }
 
 1;
+
+=head1 NAME
+
+Bugzilla::Extension::Sync::API - the Bugzilla::Extension::Sync API.
+
+=head1 DESCRIPTION
+
+This package provides basic services for syncing. It allows Syncing extensions
+to register for events, and register a data parser for the opaque sync data
+blob.
+
+=head1 SYNOPSIS
+
+  package Bugzilla::Extension::SyncFoo;
+  use base qw(Bugzilla::Extension);
+  
+  use Bugzilla::Extension::Sync::API;
+  
+  our $SYSTEM = "Foo";
+  
+  sub install_update_db {
+      add_sync_mode($SYSTEM, "Shared");
+  }
+  
+  sub _bug_updated {
+      my ($args) = @_;
+      my $bug = $args->{'bug'};
+      ...
+  }
+  
+  register_sync_event_handler("bug_updated", $SYSTEM, \&_bug_updated);
+  
+  sub _parse_foo_data {
+      return thaw(@_[0]->{'cf_sync_data'});
+  }
+  
+  register_sync_data_parser($SYSTEM, \&_parse_foo_data);
+
+=head1 DESCRIPTION
+
+=head2 Methods
+
+=over
+
+=item C<add_sync_mode>
+
+There may be multiple ways of syncing with a remote system - e.g. one way
+could be that the bug is read-only there, and mastered here, and another way
+might be the reverse. The cf_sync_mode custom field stores both the name of
+the remote system and, optionally, the mode.
+
+The first, mandatory argument is the UI name of the remote system. We suggest
+something short and with no spaces, and we also suggest using a $SYSTEM variable
+(see Synopsis) to make sure you don't misspell it anywhere.
+
+The second, optional argument is used when there is more than one way of syncing
+with a system. This argument disambiguates the ways. So you might have:
+
+  sub install_update_db {
+      add_sync_mode($SYSTEM, "Shared");
+      add_sync_mode($SYSTEM, "Read Only");
+  }
+
+As shown, this function should be called from the C<install_update_db> hook. 
+
+=item C<register_sync_event_handler>
+
+There are currently 3 sync events - C<bug_updated>, C<attachment_created> and
+C<attachment_updated>. (There is no C<bug_created> event because the model is
+that bugs need to exist before they can be set to sync.) This function allows 
+you to register a callback function to be called when one of those events
+happens.
+
+The first parameter is the name of the event, the second is the name of the
+remote system (your function will only be called for bugs set to sync with that
+system) and the third is a reference to the callback function.
+
+Users need to be careful - if their C<bug_updated> handler updates a bug, the 
+C<bug_updated> handler might be called again. Always set $bug->{'suppress_sync'} 
+to 1 on any bug objects where you don't want calling $bug->update() to trigger
+another event. The same applies for updated attachments.
+
+For newly-created attachments, it's more complicated. When your code to receive 
+attachments
+creates a new attachment object, the C<attachment_created> handler will get
+called. One way of filtering out these bogus calls is to have new attachments
+created by a dedicated sync user, and to check whether the attachment was
+created by that user before proceeding in the handler.
+
+The callback function receives a single argument, a hash, with named parameters
+in it. Currently-available parameters are as follows:
+
+=over
+
+=item C<bug_updated>
+
+Arguments are: 
+C<bug> - the Bug object; 
+C<timestamp> - the timestamp of the change;
+C<changes> - a structure giving the 'before' and 'after' values of changed
+fields.
+
+=item C<attachment_created>
+
+Arguments are: C<attachment> - the new Attachment object.
+
+=item C<attachment_updated>
+
+Arguments are: C<attachment> - the updated Attachment object.
+
+=back
+
+=item C<register_sync_data_parser>
+
+The Sync system stores the last data received from the remote system for a 
+particular bug. It can store this in any form, including the form it was
+received in, but implementations should register a sync data parser to turn it
+into a Perl structure. This is used, among other things, for the generic
+"last sync data display" system - bugs have a link which shows the data. (This
+prevents implementations from having to map every synced field to a Bugzilla
+field - users can just look at the separate page showing what was sent.)
+
+The first argument is the System name, the second is a reference to the callback
+function. The callback function receives one argument - the bug. 
+C<$bug-<gt>{cf_sync_data}> has the data necessary, and you should return a
+Perl hash (as complex in structure as you like).
+
+=back
+
+=head1 LICENSE
+
+This software is available under the Mozilla Public License 1.1.
+
+=cut

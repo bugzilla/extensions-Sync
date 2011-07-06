@@ -35,9 +35,11 @@ pre_testing();
 
 use Bugzilla;
 use Bugzilla::Extension::Sync::Util;
-use MockBug;
 
-test_set_from_name();
+use Bugzilla::Extension::Sync::Test::MockBug;
+*MockBug:: = \*Bugzilla::Extension::Sync::Test::MockBug::;
+
+test__set_from_name();
 test_find_setter();
 test_field_error();
 test_get_bug_for();
@@ -46,26 +48,26 @@ done_testing();
 
 # XXXValeo-specific
 ###############################################################################
-# set_from_name
+# _set_from_name
 ###############################################################################
-sub test_set_from_name {
+sub test__set_from_name {
     my $bug = new MockBug({ product => "doesntmatter" });
-    Bugzilla::Extension::Sync::Util::set_from_name($bug, 
+    Bugzilla::Extension::Sync::Util::_set_from_name($bug, 
                                                    "product", 
                                                    "DAG RVC 2.0");
     is($bug->{'product_id'}, 3);
 
-    Bugzilla::Extension::Sync::Util::set_from_name($bug, "component", "HW");
+    Bugzilla::Extension::Sync::Util::_set_from_name($bug, "component", "HW");
     is($bug->{'component_id'}, 7);
 
     $bug = new MockBug({ product => "doesntmatter" });
     local *Bugzilla::Extension::Sync::Util::error = sub { return; };
-    Bugzilla::Extension::Sync::Util::set_from_name($bug, 
+    Bugzilla::Extension::Sync::Util::_set_from_name($bug, 
                                                    "product", 
                                                    "Doesn'tExist");
     is($bug->{'product_id'}, undef);
 
-    Bugzilla::Extension::Sync::Util::set_from_name($bug, 
+    Bugzilla::Extension::Sync::Util::_set_from_name($bug, 
                                                    "component", 
                                                    "Doesn'tExist");
     is($bug->{'component_id'}, undef);
@@ -98,7 +100,7 @@ sub test_find_setter {
 # field_error
 ###############################################################################
 sub test_field_error {
-    local *Bugzilla::Extension::Sync::Util::record_error_message = sub { };
+    local *Bugzilla::Extension::Sync::Util::_record_error_message = sub { };
 
     my $bug = new MockBug({
         add_comment     => sub { $_[0]->{'comments'} = [$_[1]]; },
