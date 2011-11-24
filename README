@@ -1,9 +1,24 @@
+Bugzilla Sync Extension
+-----------------------
+
+This is an extension for asynchronous (i.e. non-real-time) synchronization of 
+data from Bugzilla to another system. It provides generic services, and requires
+you to write an extension to integrate with the specific system you have in 
+mind. Please see the perldoc in the individual files, particularly Extension.pm,
+for an idea of how to use it.
+
+This software is stable and in production for syncing between a Bugzilla and
+two different remote systems with very different syncing styles.
+
 Configuration
 -------------
 
 Once you have installed this software and run checksetup.pl successfully,
 you need to manually configure Bugzilla by hand in the following ways:
 
-* Configure cf_sync_data to only appear in really unlikely 
+* Configure the cf_sync_data custom field to only appear in really unlikely 
   circumstances (e.g. when Product is set to 'Trash'). This is easier then
-  hiding them completely, and allows them to be re-shown for debugging.
+  hiding the field completely, and allows it to be re-shown for debugging.
+
+Gerv <gerv@gerv.net>
+2011-11-24

@@ -40,6 +40,10 @@ use File::Slurp;
 use XML::LibXML;
 
 my @tests = (
+  { 'name'   => 'empty',
+    'struct' => {},
+    'xml'    => '<R/>'
+  },
   { 'name'   => 'Simple key/value',
     'struct' => { 'A' => 'B' },
     'xml'    => '<R A="B"/>'
@@ -97,7 +101,7 @@ sub test_libxml_to_structure {
         my $result = libxml_to_structure($doc);
         $result = $result->{'R'};
         is_deeply($result, $test->{'struct'}, "LI to S: " . $test->{'name'});
-    }    
+    }
 }
 
 ###############################################################################

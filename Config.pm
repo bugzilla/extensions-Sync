@@ -30,9 +30,57 @@ use constant REQUIRED_MODULES => [
         module  => 'Tie::IxHash',
         version => 0,
     },
+    {
+        package => 'Clone',
+        module  => 'Clone',
+        version => 0,
+    },
+    {
+        package => 'Data-Visitor',
+        module  => 'Data::Visitor',
+        version => 0,
+    },
+    {
+        package => 'DateTime-Format',
+        module  => 'DateTime::Format::XSD',
+        version => 0,
+    },
+    {
+        package => 'DateTime-Format',
+        module  => 'DateTime::Format::MySQL',
+        version => 0,
+    },
+    {
+        package => 'XML-LibXML',
+        module  => 'XML::LibXML',
+        version => 0,
+    },
+    {
+        package => 'XML-LibXML-XPathContext',
+        module  => 'XML::LibXML::XPathContext',
+        version => 0,
+    },
 ];
 
 use constant OPTIONAL_MODULES => [
+    {
+        package => 'LWP',
+        module  => 'LWP::UserAgent',
+        version => 0,
+        feature => ["sync_test"]
+    },
+    {
+        package => 'Test-Deep',
+        module  => 'Test::Deep',
+        version => 0,
+        feature => ["sync_test"]
+    },
+    {
+        package => 'Test-XML',
+        module  => 'Test::XML',
+        version => 0,
+        feature => ["sync_test"]
+    },
 ];
 
 __PACKAGE__->NAME;

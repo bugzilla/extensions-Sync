@@ -34,6 +34,8 @@ our @EXPORT = qw(
 
 use Bugzilla::Util qw(datetime_from trim);
 use Bugzilla::Extension::Sync::Util;
+use Tie::IxHash;
+use XML::LibXML;
 
 # Can take a string or a DateTime object
 sub datetime_to_xsd {
@@ -75,8 +77,9 @@ sub extract_with_xpath {
             
             # If we get back a simple element (no sub-elements) with a "content" 
             # member, use the content; anything more complex we keep as-is.
-            my $complex = 0;
             if (ref($structure) eq "HASH") {
+                my $complex = 0;
+                
                 foreach my $value (values(%$structure)) {
                     if (ref($value)) {
                         $complex = 1;
@@ -84,7 +87,7 @@ sub extract_with_xpath {
                     }
                 }
                 
-                if (!$complex && defined($structure->{'content'})) {
+                if (!$complex && exists($structure->{'content'})) {
                     $structure = $structure->{'content'};
                 }
             }
@@ -92,7 +95,9 @@ sub extract_with_xpath {
             $data->{$key} = $structure;
         }
         else {
-            return undef;
+            # We can't assume that every field is always present, so we 
+            # just ignore this.
+            next;
         }
     }
 
@@ -117,8 +122,20 @@ sub populate_with_xpath {
         my @nodes = $xpc->findnodes($map->{$key});
         
         if (@nodes) {
-            $nodes[0]->removeChildNodes();
-            structure_to_libxml($data->{$key}, $nodes[0]);
+            if (defined($data->{$key})) {
+                $nodes[0]->removeChildNodes();
+                structure_to_libxml($data->{$key}, $nodes[0]);
+            }
+            else {
+                # 'undef' for data value means: 'remove this bit entirely'
+                if ($nodes[0]->nodeType == XML_ATTRIBUTE_NODE) {
+                    my $parent = $nodes[0]->getOwnerElement();
+                    $parent->removeAttribute($nodes[0]->nodeName);
+                }
+                else {
+                    $nodes[0]->parentNode->removeChild($nodes[0]);
+                }
+            }
         }
     }
 }
@@ -173,7 +190,10 @@ sub libxml_to_structure {
         $retval = $doc->nodeValue;
     }
     else {
-        $retval = {};
+        # Hashes have to be ordered for round-trippability
+        my %hash;
+        tie(%hash, 'Tie::IxHash');
+        $retval = \%hash;
         
         foreach my $attr ($doc->attributes()) {
             $retval->{$attr->nodeName} = $attr->value;
@@ -181,7 +201,9 @@ sub libxml_to_structure {
         
         foreach my $node ($doc->childNodes()) {
             if ($node->isa('XML::LibXML::Text')) {
-                $retval->{'content'} = trim($node->nodeValue);
+                if (trim($node->nodeValue)) {
+                    $retval->{'content'} = trim($node->nodeValue);
+                }
             }
             elsif ($node->isa('XML::LibXML::Element')) {
                 my $value = libxml_to_structure($node);
@@ -223,7 +245,7 @@ __END__
 =head1 NAME
 
 Bugzilla::Extension::Sync::XML - a grab-bag of XML-related functions for 
-                                  implementing Sync extensions.
+                                  implementing Sync plugins.
 
 =head1 SYNOPSIS
 
@@ -232,7 +254,7 @@ None yet.
 =head1 DESCRIPTION
 
 This package provides a load of useful functions for implementing Sync
-extensions where those extensions are communicating with the remote system
+plugins where those extensions are communicating with the remote system
 in XML format. This documentation is currently just an overview; you'll need to 
 read the code to see exact parameters and return values.
 
@@ -240,6 +262,10 @@ read the code to see exact parameters and return values.
 
 Converts a timestamp string (e.g. creation_ts or delta_ts) to an XML Schema
 date.
+
+=head2 xsd_to_datetime
+
+Converts an XML Schema date to an SQL timestamp string.
 
 =head2 extract_with_xpath
 
@@ -261,7 +287,7 @@ back into the document at the appropriate place according to the XPaths.
 Sometimes you need to work with an XML-based data structure, but it's much 
 easier to do it as a Perl data structure, and convert it to LibXML objects
 later. This function allows you to turn a Perl data structure into a LibXML 
-structure. In other words, this function works a bit like XML::Simple.
+structure. In other words, this function works a bit like L<XML::Simple>.
 
   {
       Element => { AttrName => AttrValue,

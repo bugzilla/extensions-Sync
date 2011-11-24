@@ -71,8 +71,7 @@
   <tt>
   [% xml.print(bug.sync_data) %]
   </tt>
-  <p>(Note: these are the values sent most recently. They may have changed 
-  since we last received an update.)</p>
+  <p>(Note: these are the values sent on [% bug.cf_sync_delta_ts %], which was the last time we received an update for this bug. They may have changed since then.)</p>
 
 [% ELSIF NOT bug.is_syncing %]
 

@@ -19,15 +19,13 @@
 # Contributor(s):
 #   Written to the Glory of God by Gervase Markham <gerv@gerv.net>.
 
+package Bugzilla::Extension::Sync::Test::Util;
 use strict;
 use warnings;
 use base 'Exporter';
 
-use Test::More;
 use Test::Deep;
-use Data::Dumper;
-use FindBin '$Bin';
-use File::Slurp;
+use LWP::UserAgent;
 
 BEGIN {
     use Bugzilla;
@@ -37,6 +35,8 @@ BEGIN {
 use Bugzilla;
 use Bugzilla::Constants;
 use Bugzilla::Extension::Sync::Util;
+use File::Spec::Functions;
+use File::Slurp;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
@@ -121,7 +121,7 @@ sub get_bug_as_struct {
     return "ASKED FOR STRUCT FOR BUG 0" if !$bug_id;
 
     my $ua = new LWP::UserAgent();
-    # XXX
+    
     my $username = 'superuser@example.com';
     my $password = 'superuser';
 
@@ -129,7 +129,10 @@ sub get_bug_as_struct {
               "show_bug.cgi?Bugzilla_login=$username&" .
               "Bugzilla_password=$password&ctype=xml&id=" . $bug_id;
     my $response = $ua->get($url);
-    if ($response->is_success) {        
+    if ($response->content =~ /Bugzilla &ndash; Invalid Username Or Password/) {
+        return "CAN'T GET BUG $bug_id; please set up superuser\@example.com";
+    }
+    elsif ($response->is_success) {
         return _parse_xml($response->content);
     }
     else {
@@ -142,6 +145,7 @@ sub _clean_struct_bug {
 
     $bug = $bug->{'bugzilla'};
     delete($bug->{'exporter'});
+    delete($bug->{'urlbase'});
 
     $bug = $bug->{'bug'};
 
@@ -150,8 +154,18 @@ sub _clean_struct_bug {
     {
         delete($bug->{$delfield});
     }
-
-    foreach my $long_desc (@{ $bug->{'long_desc'} || [] }) {
+    
+    my @long_descs = ();
+    if (ref($bug->{'long_desc'}) eq "ARRAY") {
+        @long_descs = @{$bug->{'long_desc'}};
+    }
+    elsif (ref($bug->{'long_desc'}) eq "HASH") {
+        @long_descs = ($bug->{'long_desc'});
+        # Force array
+        $bug->{'long_desc'} = \@long_descs;
+    }
+    
+    foreach my $long_desc (@long_descs) {
         foreach my $delfield qw(bug_when commentid) {
             delete($long_desc->{$delfield});
         }
@@ -185,3 +199,25 @@ sub cmp_bugs {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+Bugzilla::Extension::Sync::Test::Util - utilities for testing Sync plugins.
+
+=head1 SYNOPSIS
+
+
+=head1 DESCRIPTION
+
+This package provides code to help write tests for Sync plugins.
+
+If you are to use some of the functions, your test database needs a Bugzilla
+user C<superuser@example.com> with password C<superuser>.
+
+=head1 LICENSE
+
+This software is available under the Mozilla Public License 1.1.
+
+=cut

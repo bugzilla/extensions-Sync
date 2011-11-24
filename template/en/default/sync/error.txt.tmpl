@@ -28,9 +28,32 @@ Coding error: no error tag specified.
 
 Cannot log in as '[% user %]'. Perhaps this email address does not represent a valid user in this database?
 
+  [% ELSIF error == 'bad_device_name' %]
+
+Value '[% value %]' is not a valid value in field '[% field %]'.
+[% IF bug.id %]
+Bug [% bug.id %].
+[% END %]
+[% IF bug.cf_refnumber %]
+External ID: [% bug.cf_refnumber %].
+[% END %]
+
+This is a fatal error. Bug cannot be modified. Check that the inbound mappings are up to date for the Bugzilla field '[% field %]'.
+
   [% ELSIF error == 'bad_field_value' %]
 
 Cannot get ID of value '[% value %]' in field [% field %].
+
+  [% ELSIF error == 'cant_create_bug' %]
+  [% USE Dumper %]
+  
+Can't create bug. The information used to create the bug was as follows:
+
+[%+ Dumper.dump(bug) %]
+
+However, if we attempted to set an invalid value and it was rejected, it will 
+not appear in the above dump. In that case, other errors may pin down a more 
+specific cause.
 
   [% ELSIF error == 'component_without_product' %]
 
@@ -40,6 +63,15 @@ Attempted to get ID of component [% value %] without having a product ID set; th
 
 Update was sent for bug [% bug_id %] (external ID '[% ext_id %]') but this bug is not marked as being synced.
 
+  [% ELSIF error == 'mismatched_ids' %]
+
+The remote system sent a message which associated bug ID '[% bug.id %]' with the remote ID [% ext_id %]. However, those two IDs are not associated in Bugzilla.
+[% IF bug.cf_refnumber %]
+Bugzilla thinks that bug [% bug.id %] is associated with external ID [% bug.cf_refnumber %].
+[% ELSE %]
+Bugzilla does not think that bug [% bug.id %] is associated with any external ID.
+[% END %]
+
   [% ELSIF error == 'no_instruction' %]
 
 No known instruction in part of map '[% map_name %]': params are '[% params %]'.
@@ -47,6 +79,11 @@ No known instruction in part of map '[% map_name %]': params are '[% params %]'.
   [% ELSIF error == 'no_xpath_for_key' %]
 
 No XPath is given in the XPath map for the key [% key %].
+
+  [% ELSIF error == 'unknown_bug_id' %]
+
+The remote system sent a message referencing the bug ID '[% bug_id %]', but no such bug exists in Bugzilla. [% IF ext_id %]The remote system's ID was 
+[% ext_id %].[% END %]
 
   [% ELSIF error == 'xml_creation_failed' %]
 

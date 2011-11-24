@@ -34,6 +34,8 @@ our @EXPORT = qw(
     get_bug_for
     get_or_create_user
     get_default_component_owner
+    
+    merge_hashrefs
 );
 
 use Bugzilla::Util qw(generate_random_password datetime_from);
@@ -42,8 +44,9 @@ use Bugzilla::Mailer;
 use Bugzilla::User qw(login_to_id);
 use Bugzilla::Constants;
 
-use File::Slurp;
 use Cwd qw(realpath);
+use File::Slurp;
+use Carp;
 
 # General errors not specific to a particular bug
 sub error {
@@ -69,9 +72,11 @@ sub field_error {
 
     $bug->add_comment($msg, { 'bug_when' => $timestamp });
 
-    # Add keyword to prevent further syncing. Caller must eventually call
-    # bug->update();
-    $bug->modify_keywords('syncerror', 'add');
+    if (!$vars->{'keep_trying'}) {
+        # Add keyword to prevent further syncing. Caller must eventually call
+        # bug->update();
+        $bug->modify_keywords('syncerror', 'add');
+    }    
 }
 
 # Call when there is a problem exchanging data. Issues a warning or
@@ -79,14 +84,16 @@ sub field_error {
 sub sync_problem {
     my ($error, $vars) = @_;
 
-    if ($vars->{'job'}->failures + 1 >= $vars->{'worker'}->max_retries) {
+    # Used if this sync attempt is a JobQueue job
+    if ($vars->{'job'} && 
+        $vars->{'job'}->failures + 1 >= $vars->{'worker'}->max_retries) {
         $vars->{'fatal'} = 1;
-
-        if (!Bugzilla->params->{'sync_debug'}) {
-            # Turn off all syncing
-            SetParam('sync_enabled', 0);
-            write_params();
-        }
+    }
+    
+    if ($vars->{'fatal'} && !Bugzilla->params->{'sync_debug'}) {
+        # Turn off all syncing
+        SetParam('sync_enabled', 0);
+        write_params();
     }
 
     my $msg = _get_message("sync-error", $error, $vars);
@@ -99,6 +106,7 @@ sub _get_message {
 
     my $template = Bugzilla->template;
     $vars->{'error'} = $error;
+    $vars->{'ref'} = sub { return ref($_[0]) };
     my $msg;
     $template->process("sync/$template_name.txt.tmpl", $vars, \$msg);
 
@@ -109,7 +117,7 @@ sub _record_error_message {
     my ($msg) = @_;
 
     if (Bugzilla->params->{'sync_debug'}) {
-        warn $msg;
+        carp $msg;
     }
 
     my $recipients = Bugzilla->params->{'sync_error_email'};
@@ -126,6 +134,12 @@ sub _record_error_message {
     $template->process("sync/email.txt.tmpl", $vars, \$email);
 
     MessageToMTA($email);
+   
+    # Mail is not being delivered, so also write to a file
+    my $dir = bz_locations()->{'extensionsdir'} . '/Sync/log';
+    my $filename = "$dir/error_email_log.txt";
+    $filename = realpath($filename);
+    write_file($filename, { 'binmode' => 'utf8' }, $email . "\n\n");    
 }
 
 sub get_or_create_user {
@@ -137,16 +151,17 @@ sub get_or_create_user {
     my $name = $args{'name'};
     my $domain = $args{'domain'} || "invalid.invalid";
 
-    my $users = Bugzilla::User::match($email || $name);
+    if (!$email) {
+        $email = lc($name);
+        $email =~ s/\s+/\./g;
+        $email =~ s/[^a-z\.]//g;
+        $email .= "\@$domain";
+    }
+
+    # Second parameter is max number of results to return
+    my $users = Bugzilla::User::match($email, 1);
     my $user = $users->[0];
     if (!$user) {
-        if (!$email) {
-            $email = lc($name);
-            $email =~ s/\s+/\./g;
-            $email =~ s/[^a-z\.]//g;
-            $email .= "\@$domain";
-        }
-
         $user = Bugzilla::User->create({
             login_name      => $email,
             cryptpassword   => generate_random_password(),
@@ -154,6 +169,7 @@ sub get_or_create_user {
         });
 
         $user->set_disable_mail(1);
+        $user->update();
     }
 
     return $user;
@@ -243,7 +259,11 @@ sub _set_from_name {
     }
     else {
         # We need a product, so this is fatal
-        error("bad_field_value", { 'field' => $field, 'value' => $value });
+        error("bad_device_name", { 
+            'field'  => $field, 
+            'value'  => $value,
+            'bug'    => $bug
+        });
     }
 }
 
@@ -279,16 +299,24 @@ sub get_bug_for {
         # Remove the error flag. We now have a 'shell' Bug we can use,
         # which allows us to make a whole lot of other code common.
         delete($bug->{'error'});
+        
+        # Setting the status requires there to be an existing status, so we
+        # hack one in. This makes $bug->set_status(...) just work.
+        $bug->{'bug_status'} = "NEW";
+        
+        my $cf_rn_field = new Bugzilla::Field({ name => 'cf_refnumber' });
+        $bug->set_custom_field($cf_rn_field, $ext_id);
     }
     else {
         # Sanity check that $ext_id is what we expect
-        if ($ext_id ne $bug->{'cf_refnumber'}) {
-            field_error('mismatched_external_id', $bug, { 
-                ext_id       => $ext_id,
-                cf_refnumber => $bug->{'cf_refnumber'} 
+        if (!defined($bug->{'cf_refnumber'}) ||
+            $ext_id ne $bug->{'cf_refnumber'}) 
+        {
+            error('mismatched_ids', { 
+                bug    => $bug,
+                ext_id => $ext_id || ""
             });
             
-            $bug->update();
             return;
         }
     }
@@ -306,7 +334,9 @@ sub log_data {
     my $dir = bz_locations()->{'extensionsdir'} . '/Sync/log';
     my $filename .= "$dir/$stem-$now.$ext";
     $filename = realpath($filename);
-    write_file($filename, { 'binmode' => 'utf8' }, $data);
+    open LOGFILE, ">:utf8", $filename;
+    print LOGFILE $data;
+    close(LOGFILE);
     
     return $filename;
 }
@@ -325,6 +355,12 @@ sub get_default_component_owner {
     return $user;
 }
 
+sub merge_hashrefs {
+    my ($a, $b) = @_;
+    my %merged = (%$a, %$b);
+    return \%merged;
+}
+
 1;
 
 __END__
@@ -332,7 +368,7 @@ __END__
 =head1 NAME
 
 Bugzilla::Extension::Sync::Util - a grab-bag of useful functions for 
-                                  implementing Sync extensions.
+                                  implementing Sync plugins.
 
 =head1 SYNOPSIS
 
@@ -341,7 +377,7 @@ None yet.
 =head1 DESCRIPTION
 
 This package provides a load of useful functions for implementing Sync
-extensions. This documentation is currently just an overview; you'll need to 
+plugins. This documentation is currently just an overview; you'll need to 
 read the code to see exact parameters and return values.
 
 =head2 error
@@ -357,7 +393,8 @@ Call this if you have an error syncing a particular field. It will post a
 comment to the bug, but the sync can continue.
 
 Note that you must call $bug->update() at some point after calling this 
-function.
+function, if you hadn't planned to do so anyway. We don't do it for you, because
+you may be in the middle of updating your Bug object.
 
 You can add additional error tags and corresponding messages using template 
 hooks.
@@ -372,9 +409,10 @@ and disable sync.
 
 =head2 get_or_create_user
 
-Pass in either "Name" or "Email" parameters and this function will try and
+Pass in either "name" or "email" parameters and this function will try and
 find a matching user. If it can't find one, it will create one - with a made-up
-invalid email address if necessary. Either way, it returns a L<Bugzilla::User>
+invalid email address if necessary. (Pass in a 'domain' parameter to pick the
+invalid domain that it will use.) Either way, it returns a L<Bugzilla::User>
 object.
 
 This is useful if you want to use a model of changes in Bugzilla appearing to
@@ -382,10 +420,12 @@ be made by the same people who actually made them in the remote system, and so
 need an account for each user of the remote system which makes such a change,
 but don't want to have to create them all in advance.
 
-=head2 update_bug_field_directly
+=head2 store_sync_data
 
-A convenience method to update a field in a bug directly in the database,
-without going through a Bug object. Use with care!
+Call this after you've finished a sync, with the sync data - it'll store it,
+and update the sync timestamp. The sync data will then be available as a 
+structure from C<$bug-E<lt>sync_data()>, and can be viewed by clicking a link
+on the bug page.
 
 =head2 find_setter
 
@@ -413,8 +453,8 @@ Data goes to $BUGZILLA_HOME/extensions/Sync/log.
 
 =head2 get_default_component_owner
 
-Returns details about the owner of the selected component. Should probably
-return a L<Bugzilla::User> object, but doesn't.
+Returns a L<Bugzilla::User> object representing the owner of the given 
+component.
 
 =head1 LICENSE
 

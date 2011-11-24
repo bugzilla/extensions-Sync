@@ -31,16 +31,16 @@ our @EXPORT = qw(map_bug_to_external
 use Bugzilla;
 use Bugzilla::Extension::Sync::Util;
 
-use Data::Dumper;
 use Data::Visitor::Callback;
 use Clone qw(clone);
+use Data::Dumper;
 
-################################################################################
+###############################################################################
 # Bug to external
 # 
 # Params: bug, map
 # Return: data structure of external data, based on map with substitutions
-################################################################################
+###############################################################################
 sub map_bug_to_external {
     my ($bug, $map) = @_;
     
@@ -56,6 +56,11 @@ sub map_bug_to_external {
             }
             elsif ($params->{'literal'}) {
                 $value = $params->{'literal'};
+            }
+            elsif ($params->{'sync_data_field'}) {
+                my $sdf = $params->{'sync_data_field'};
+                $value = ($bug->sync_data && $bug->sync_data->{$sdf}) 
+                         || undef;
             }
             elsif ($params->{'field'}) {
                 my $bzfield = $params->{'field'};
@@ -95,7 +100,7 @@ sub map_bug_to_external {
             else {
                 # Coding error - unknown instructions in Mapping.pm
                 error("no_instruction", { 
-                    params   => $params,
+                    params   => Dumper($params),
                     map_name => $map->{'-name'} 
                 });
             }
@@ -131,6 +136,9 @@ sub map_bug_to_external {
     return $ext;
 }
 
+###############################################################################
+# External to bug
+###############################################################################
 sub map_external_to_bug {
     my ($ext, $bug, $map, $ext_id) = @_;
 
@@ -164,7 +172,7 @@ sub map_external_to_bug {
         
         my $params = $map->{$field};
         
-        next if !$params;
+        next if !defined($params);
         next if !$is_new_bug && $params->{'newbugonly'};
 
         # Get the field value to map.
@@ -255,8 +263,8 @@ sub map_external_to_bug {
         }                
         else {
             # Error - unknown instructions in Mapping.pm
-            error("no_instruction_bad_map", { 
-                field    => $field,
+            error("no_instruction", { 
+                params   => Dumper($params),
                 map_name => $map->{'-name'} 
             });
             
@@ -278,8 +286,7 @@ sub map_external_to_bug {
 
         # Version is compulsory in Bugzilla, but can't be set until product
         # and component are set (even if the value is present everywhere).
-        # So we default it here. This puts a requirement on the Bugzilla
-        # config for this value to be present in all products with syncing.
+        # So we default it here.
         $bug->{'version'} ||= "Unspecified";
 
         # create() doesn't like additional hash members, so remove them.
@@ -287,15 +294,23 @@ sub map_external_to_bug {
                            "product_obj",
                            "keyword_objects",
                            "added_comments",
-                           "_multi_selects")
+                           "_multi_selects",
+                           "status",
+                           "dup_id")
         {
             delete $bug->{$field};
         }
 
         # We use the shell bug as the params hash for the create call,
         # and get back a proper new bug, with an ID and everything.
-        $bug = Bugzilla::Bug->create($bug);
-
+        eval {
+            $bug = Bugzilla::Bug->create($bug);
+        };
+        if ($@) {
+            error("cant_create_bug", { 'bug' => $bug });
+            next;
+        }
+        
         # Insert comments from $bug beyond the first, if any
         if (scalar @added_comments) {
             $bug->{'added_comments'} = \@added_comments;
@@ -314,29 +329,23 @@ sub maybe_collision_warning {
     my $field = new Bugzilla::Field({name => $field_name});
     
     my $dbh = Bugzilla->dbh;
-    my $result = $dbh->selectrow_array("SELECT 1 
-                                        FROM bugs_activity, bugs 
-                                        WHERE bugs.bug_id = ? 
-                                          AND bugs_activity.bug_id = ?
-                                          AND fieldid = ? 
-                                          AND bug_when > bugs.cf_sync_delta_ts
-                                          AND added != ?", 
+    my $result = $dbh->selectrow_arrayref("SELECT removed, added 
+                                           FROM bugs_activity, bugs 
+                                           WHERE bugs.bug_id = ? 
+                                            AND bugs_activity.bug_id = ?
+                                            AND fieldid = ? 
+                                            AND bug_when > bugs.cf_sync_delta_ts
+                                            AND added != ?
+                                           ORDER BY bug_when DESC 
+                                           LIMIT 1", 
                                           undef, $bug->id, $bug->id, 
                                           $field->id, $value);
 
-    if ($result) {
-        my @bzvalues = $dbh->selectrow_array("SELECT removed, added 
-                                              FROM bugs_activity 
-                                              WHERE bug_id = ? 
-                                              AND fieldid = ? 
-                                              ORDER BY bug_when DESC 
-                                              LIMIT 1", 
-                                              undef, $bug->id, $field->id);
-        
+    if (defined($result)) {
         field_error('collision_warning', $bug, {
             field  => $field_name,
-            old_bz => $bzvalues[0],
-            new_bz => $bzvalues[1],
+            old_bz => $result->[0],
+            new_bz => $result->[1],
             value  => $value
         });            
     }
@@ -386,16 +395,11 @@ behaviours:
 
 =over
 
-=item C<undef> 
+=item C<field =E<lt> 'foo'>
 
-This means "do nothing with this field" - either ignore it on arrival, or do 
-not set it on sending.
+This means "copy the value to/from field foo".
 
-=item C<field>
-
-This means "copy to/from the field which is the value for this key".
-
-=item C<map>
+=item C<map =E<lt> { ... }>
 
 This means "...and, when doing so, use this value mapping". Within the map:
 
@@ -410,21 +414,21 @@ which shouldn't happen, so record the fact"
 
 =back
 
-=item C<literal>
+=item C<literal => 'foo'>
 
-This means "use the value of this key, literally, every time".
+This means "use the value 'foo', literally, every time".
 
-=item C<newbugonly>
+=item C<newbugonly =E<lt> 1>
 
 This means "do this action only for bugs we are seeing for the first time."
 
-=item C<collisionwarning>
+=item C<collisionwarning =E<lt> 1>
 
 This means "Work out if the sync delays mean this value has been updated on 
 both sides simultaneously, and if so, warn the Bugzilla users by adding a 
 comment"
 
-=item C<function>
+=item C<function =E<lt> \&foo>
 
 This means "call this function because we need special processing which is 
 more complicated than any of the set options". The callback functions have a 
@@ -442,23 +446,26 @@ map_bug_to_external's callback functions work as follows:
 
 =back
 
-=head3 Example
-
-XXX
-
 =head2 Methods
 
 =over
 
 =item C<map_external_to_bug>
 
-This function maps external data to bug fields. One of its parameters is a 
-'map', which is a data structure which defines how the mapping is done, as 
-follows.
+This function maps external data to bug fields. 
+
+Parameters: the external data, the bug, the map (a data structure which 
+defines how the mapping is done, as explained above) and the external issue ID.
+
+It returns a bug object (not necessarily the same one passed in) or C<undef> 
+if the bug is not being synced. You must call C<$bug-E<lt>update()> on the 
+returned bug.
 
 =item C<map_bug_to_external>
 
-XXX
+This function maps bug fields to external data; you get back a data structure
+which is like the map you sent in, but with all the instruction objects replaced
+with the bit of data which those instructions ferreted out from the bug.
 
 =back
 

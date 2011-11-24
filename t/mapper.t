@@ -227,7 +227,7 @@ sub test_map_external_to_bug {
                                         'map' => {}
                                       }
                                   },
-        'no_instruction_bad_map' => { "Key1" => { 'foopy' => 'glurpy' } },
+        'no_instruction' => { "Key1" => { 'foopy' => 'glurpy' } },
     );
 
     foreach my $error (keys %errors_to_bad_maps) {

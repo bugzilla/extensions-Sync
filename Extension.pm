@@ -27,11 +27,15 @@ use Bugzilla::Extension::Sync::Util;
 use Bugzilla::Extension::Sync::API qw(dispatch_sync_event);
 use Bugzilla::Constants;
 use Bugzilla::Util qw(lsearch);
+use Bugzilla::Error;
 
 our $VERSION = '1.0';
 
 ###############################################################################
 # Extra bug fields
+#
+# cf_refnumber: the reference number of the bug in the external system. For 
+# historical reasons, the internal name of this field does not contain "sync".
 #
 # cf_sync_mode: NULL if issue is not synced. Otherwise is sync system, 
 # optionally followed by a colon and then sync mode. 
@@ -50,6 +54,12 @@ sub install_update_db {
 
     my $extra_fields = [
         {
+            name        => 'cf_refnumber',
+            description => 'External Reference Number',
+            type        => FIELD_TYPE_FREETEXT,
+            buglist     => 0
+        },
+        {
             name        => 'cf_sync_mode',
             description => 'Sync Mode',
             type        => FIELD_TYPE_SINGLE_SELECT,
@@ -58,7 +68,7 @@ sub install_update_db {
         {
             name        => 'cf_sync_data',
             description => 'Last Sync Data',
-            type        => FIELD_TYPE_TEXTAREA,
+            type        => FIELD_TYPE_BINARY,
             buglist     => 0
         },
         {
@@ -68,46 +78,6 @@ sub install_update_db {
             buglist     => 0
         },
     ];
-
-    # Migration from old system - has to be done before new things are created
-    # so it can't be in the relevant sync plugin.
-    if ($dbh->bz_column_info('bugs', 'cf_dante_mode')) {
-        foreach my $field (@{ $extra_fields }) {
-            my $oldname = $field->{'name'};
-            $oldname =~ s/sync/dante/;
-
-            $dbh->bz_rename_column('bugs', $oldname,
-                                           $field->{'name'});
-            $dbh->do("UPDATE fielddefs SET name = '" . $field->{'name'} .
-                     "', description = '" . $field->{'description'} .
-                     "' WHERE name = '$oldname'");
-        }
-
-        $dbh->bz_rename_table('cf_dante_mode', 'cf_sync_mode');
-
-        # Migrate dantesyncers to syncers
-        my $group = new Bugzilla::Group({name => 'dantesyncers'});
-        $group->set_name("syncers");
-        $group->update();
-
-        # Migrate dantesyncerror to syncerror
-        my $keyword = new Bugzilla::Keyword({name => 'dantesyncerror'});
-        $keyword->set_name("syncerror");
-        $keyword->update();
-
-        # Change field values
-        foreach my $mode ("IRP", "Read Only") {
-            my $field =
-                    Bugzilla::Field::Choice->type('cf_sync_mode')->check($mode);
-            $field->set_name("DanTe: $mode");
-            $field->update();
-
-            $dbh->do("UPDATE bugs
-                      SET cf_sync_mode='DanTe: $mode'
-                      WHERE cf_sync_mode='$mode'");
-        }
-    }
-    # End migration code
 
     foreach my $extra (@$extra_fields) {
         # Only create them once...
@@ -165,7 +135,10 @@ sub bug_end_of_update {
     return if !$bug->is_syncing;
     
     # If any changes occurred...
-    if (scalar(keys %$changes) || $bug->{added_comments}) {
+    if (scalar(keys %$changes) 
+        || $bug->{added_comments}
+        || $bug->{'force_sync'})
+    {
         my $is_first_sync = (defined($changes->{'cf_sync_mode'}) &&
                             $changes->{'cf_sync_mode'}->[0] eq '---' &&
                             $changes->{'cf_sync_mode'}->[1] ne '---') ? 1 : 0;
@@ -289,6 +262,8 @@ sub _bug_sync_system {
 sub _bug_sync_data {
     my ($self) = @_;
 
+    return undef if (!$self->id);
+    
     my $system = $self->sync_system();
     return undef if (!$system);
 
@@ -557,6 +532,11 @@ get errors.
 =item * Provide a boolean Bugzilla parameter called C<initech_sync_enabled>, 
 which will switch your extension's syncing on and off.
 
+=item * Make the value of C<$sortkey> in your Param panel 1800 + the index
+of the first letter in the short name (e.g. 4 for D). This means they will
+sort in alphabetical order just after the panel for the Sync extension itself
+(which has sortkey 1800).
+
 =item * In the C<install_update_db> hook, call C<add_sync_mode("Initech")> 
 to add the name
 of the system you want to sync with to the Bugzilla UI. If there are multiple
@@ -567,11 +547,14 @@ parameter, and a different second parameter, e.g.:
   add_sync_mode("Initech", "Shared");
 
 In your extension, your code will only be called for bugs which are syncing
-with your system. You can get details of the sync mode for a bug by calling 
+with your system. You can get details of the sync mode set for a bug by calling 
 C<$bug-&gt;sync_system>.
 
 =item * You can suppress sync for a particular bug object by setting a member
-variable called C<suppress_sync>. 
+variable called C<suppress_sync>.
+
+=item * All products in which bugs are synced need to have a Version called
+"Unspecified".
 
 =back
 

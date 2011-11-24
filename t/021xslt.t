@@ -22,13 +22,11 @@
 use strict;
 use FindBin '$Bin';
 
-use lib ("../../..", "../../../lib", "$Bin/lib");
+use lib ("../../..", "../../../lib", "$Bin/lib", "lib");
 
 use File::Spec::Functions;
 use Data::Dumper;
 use Test::More;
-use Test::Differences;
-use Test::XML;
 
 BEGIN {
     use Bugzilla;
@@ -38,10 +36,10 @@ BEGIN {
 ###############################################################################
 
 use Bugzilla::Extension::Sync::XML;
-use Bugzilla::Constants;
 use File::Slurp;
-
 use XML::LibXML;
+use Bugzilla::Constants;
+use Test::XML;
 
 my $map = {
     'TicketNo Supplier'   => 'COMPANY-ISSUE-INFOS/COMPANY-ISSUE-INFO[@SI="database id"][COMPANY-REF="WernhamHogg"]/ISSUE-ID',
@@ -116,17 +114,15 @@ my $data = {
     'TicketNo' => '34',
     'Analysis Team' => 'team3',
     'Supplier Responsible' => 'team4',
-    'Attachments' => { 'SI' => 'attachment', 'content' => '', 'XFILE' => [
+    'Attachments' => { 'SI' => 'attachment', 'XFILE' => [
                      {
                        'ID' => 'ATTACH-1',
                        'SHORT-NAME' => [ 'att-1.dat' ],
-                       'content' => '',
                        'LONG-NAME-1' => [ 'BUG_34_notification.log' ]
                      },
                      {
                        'ID' => 'ATTACH-2',
                        'SHORT-NAME' => [ 'att-2.dat' ],
-                       'content' => '',
                        'LONG-NAME-1' => [ 'BUG_34_chars1.csv' ]
                      }
                    ]
@@ -157,7 +153,7 @@ sub test_extract_with_xpath {
         isnt(undef, $issue);
         
         foreach my $key (keys %$data) {
-            is_deeply($issue->{$key}, $data->{$key}, "$key correct");
+            is_deeply($issue->{$key}, $data->{$key}, "$key extract correct");
         }
     }
 }

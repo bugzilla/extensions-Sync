@@ -30,7 +30,7 @@ use strict;
 
 use Bugzilla::Config::Common;
 
-# XXXDoc The sortkey for Sync plugins should be 1800 + the index of the first
+# The sortkey for Sync plugins should be 1800 + the index of the first
 # letter of its name (e.g. 4 for D).
 our $sortkey = 1800;
 

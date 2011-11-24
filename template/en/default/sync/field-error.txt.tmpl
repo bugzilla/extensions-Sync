@@ -19,6 +19,7 @@
 [%# Contributor(s):                                                         %]
 [%#   Written to the Glory of God by Gervase Markham <gerv@gerv.net>.       %]
 
+[% USE Dumper %]
 [% error_message = BLOCK %]
   [% IF    error == '' %]
   
@@ -34,7 +35,7 @@ New Bugzilla value: [% new_bz %]
 
   [% ELSIF error == 'invalid_bzvalue' %]
 
-[% bug.id ? "Bug $bug.id" : "New bug" %]: Cannot sync value '[% value %]' from external field '[% field %]' to value '[% newvalue %]' in Bugzilla field '[% bzfield %]'. Bug's external ID is [% ext_id %]. The full error given by Bugzilla was: [% msg %]
+[% bug.id ? "Bug $bug.id" : "New bug" %]: Cannot sync value '[% ref(value) ? Dumper.dump(value) : value %]' from external field '[% field %]' [% IF newvalue %]to value '[% newvalue %]' in Bugzilla field '[% bzfield %]'[% END %]. Bug's external ID is [% ext_id %]. The full error given by Bugzilla was: [% msg %]
 
   [% ELSIF error == 'unknown_bzvalue' %]
 
