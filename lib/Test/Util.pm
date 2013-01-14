@@ -130,13 +130,13 @@ sub get_bug_as_struct {
               "Bugzilla_password=$password&ctype=xml&id=" . $bug_id;
     my $response = $ua->get($url);
     if ($response->content =~ /Bugzilla &ndash; Invalid Username Or Password/) {
-        return "CAN'T GET BUG $bug_id; please set up superuser\@example.com";
+        return "CAN'T GET BUG $bug_id: please set up superuser\@example.com";
     }
     elsif ($response->is_success) {
         return _parse_xml($response->content);
     }
     else {
-        return "CAN'T GET BUG $bug_id";
+        return "CAN'T GET BUG $bug_id: " . $response->content;
     }
 }
 
@@ -146,11 +146,12 @@ sub _clean_struct_bug {
     $bug = $bug->{'bugzilla'};
     delete($bug->{'exporter'});
     delete($bug->{'urlbase'});
+    delete($bug->{'version'});
 
     $bug = $bug->{'bug'};
 
-    foreach my $delfield qw(bug_id creation_ts delta_ts token cf_sync_data
-                            cf_sync_delta_ts) 
+    foreach my $delfield (qw(bug_id creation_ts delta_ts token cf_sync_data
+                            cf_sync_delta_ts))
     {
         delete($bug->{$delfield});
     }
@@ -166,13 +167,15 @@ sub _clean_struct_bug {
     }
     
     foreach my $long_desc (@long_descs) {
-        foreach my $delfield qw(bug_when commentid) {
+        foreach my $delfield (qw(bug_when commentid attachid)) {
             delete($long_desc->{$delfield});
         }
+
+        $long_desc->{'thetext'} =~ s/attachment \d+/attachment XXXX/;
     }
 
     foreach my $attachment (@{ $bug->{'attachment'} || [] }) {
-        foreach my $delfield qw(date delta_ts token attachid) {
+        foreach my $delfield (qw(date delta_ts token attachid)) {
             delete($attachment->{$delfield});
         }
     }

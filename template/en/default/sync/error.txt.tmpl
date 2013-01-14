@@ -24,6 +24,13 @@
   
 Coding error: no error tag specified.
 
+  [% ELSIF error == 'bad_bug_id' %]
+
+Bug ID '[% bug_id %]' sent by remote system is invalid: [% msg %].
+[% IF ext_id %]
+System gave external ID '[% ext_id %]'.
+[% END %]
+
   [% ELSIF error == 'bad_user' %]
 
 Cannot log in as '[% user %]'. Perhaps this email address does not represent a valid user in this database?
@@ -47,13 +54,13 @@ Cannot get ID of value '[% value %]' in field [% field %].
   [% ELSIF error == 'cant_create_bug' %]
   [% USE Dumper %]
   
-Can't create bug. The information used to create the bug was as follows:
+Can't create bug. The error was:
+
+[%+ msg %]
+
+The information used to create the bug was as follows:
 
 [%+ Dumper.dump(bug) %]
-
-However, if we attempted to set an invalid value and it was rejected, it will 
-not appear in the above dump. In that case, other errors may pin down a more 
-specific cause.
 
   [% ELSIF error == 'component_without_product' %]
 
@@ -72,6 +79,10 @@ Bugzilla thinks that bug [% bug.id %] is associated with external ID [% bug.cf_r
 Bugzilla does not think that bug [% bug.id %] is associated with any external ID.
 [% END %]
 
+  [% ELSIF error == 'no_ext_id' %]
+
+get_bug_for was called with no ext_id specified.
+
   [% ELSIF error == 'no_instruction' %]
 
 No known instruction in part of map '[% map_name %]': params are '[% params %]'.
@@ -89,6 +100,12 @@ The remote system sent a message referencing the bug ID '[% bug_id %]', but no s
 
 We were unable to create XML. Error was: [% msg %]. Structure was: 
 [% struct %]
+
+  [% ELSIF error == 'xml_parse_of_empty_string' %]
+
+XML parser called on empty string. Stack was:
+
+[% stack %]
 
   [% ELSIF error == 'xml_parsing_failed' %]
 

@@ -26,6 +26,7 @@ use base qw(Exporter);
 our @EXPORT = qw(
     error
     field_error
+    warning
     sync_problem
     log_data
         
@@ -34,6 +35,8 @@ our @EXPORT = qw(
     get_bug_for
     get_or_create_user
     get_default_component_owner
+    set_status_directly
+    is_bug_updated_in_db
     
     merge_hashrefs
 );
@@ -47,6 +50,7 @@ use Bugzilla::Constants;
 use Cwd qw(realpath);
 use File::Slurp;
 use Carp;
+use DateTime;
 
 # General errors not specific to a particular bug
 sub error {
@@ -54,7 +58,7 @@ sub error {
 
     my $msg = _get_message("error", $error, $vars);
 
-    _record_error_message($msg);
+    _record_error_message($msg, undef, "General Error");
 }
 
 # Call when a particular field cannot be synced but the rest of the bug is OK.
@@ -65,7 +69,7 @@ sub field_error {
     $vars->{'bug'} = $bug;
     my $msg = _get_message("field-error", $error, $vars);
 
-    _record_error_message($msg);
+    _record_error_message($msg, $bug->id, "Field Error");
 
     my $dbh = Bugzilla->dbh;
     my $timestamp = $dbh->selectrow_array("SELECT LOCALTIMESTAMP(0)");
@@ -90,15 +94,28 @@ sub sync_problem {
         $vars->{'fatal'} = 1;
     }
     
-    if ($vars->{'fatal'} && !Bugzilla->params->{'sync_debug'}) {
-        # Turn off all syncing
-        SetParam('sync_enabled', 0);
-        write_params();
-    }
-
     my $msg = _get_message("sync-error", $error, $vars);
 
-    _record_error_message($msg);
+    my $bug_id = $vars->{'bug_id'} 
+                 || ($vars->{'bug'} && $vars->{'bug'}->id)
+                 || undef;
+    
+    _record_error_message($msg, $bug_id, "Sync Error");
+}
+
+sub warning {
+    my ($warning, $vars) = @_;
+
+    return if !Bugzilla->params->{'sync_debug'};
+
+    my $msg = _get_message("warning", $warning, $vars);
+
+    my $bug_id = undef;
+    if ($vars->{'bug'}) {
+        $bug_id = $vars->{'bug'}->id
+    }
+    
+    _record_error_message($msg, $bug_id, "Sync Warning");
 }
 
 sub _get_message {
@@ -114,7 +131,7 @@ sub _get_message {
 }
 
 sub _record_error_message {
-    my ($msg) = @_;
+    my ($msg, $bug_id, $subject) = @_;
 
     if (Bugzilla->params->{'sync_debug'}) {
         carp $msg;
@@ -123,10 +140,21 @@ sub _record_error_message {
     my $recipients = Bugzilla->params->{'sync_error_email'};
     return if !$recipients;
 
+    $subject ||= "Untitled Error";
+    if (!$msg) {
+        $msg = "No message given. :-( Stack trace:\n\n";
+        use Carp qw(longmess);
+        $msg .= longmess();        
+    }
+    
     my $email;
+    if (defined($bug_id)) {
+        $subject .= ": Bug $bug_id";
+    }
+    
     my $vars = {
         to      => $recipients,
-        subject => "Sync Error",
+        subject => $subject,
         body    => $msg
     };
 
@@ -135,11 +163,16 @@ sub _record_error_message {
 
     MessageToMTA($email);
    
-    # Mail is not being delivered, so also write to a file
+    # To help in case of delivery unreliability, also write to a file
+    my $dt = DateTime->now;
+    $email = "Date: " . $dt->ymd . " " . $dt->hms . " UTC\n$email";
+    
     my $dir = bz_locations()->{'extensionsdir'} . '/Sync/log';
     my $filename = "$dir/error_email_log.txt";
     $filename = realpath($filename);
-    write_file($filename, { 'binmode' => 'utf8' }, $email . "\n\n");    
+    write_file($filename,
+               { 'binmode' => 'utf8', 'append' => 1 },
+               $email . "\n\n");    
 }
 
 sub get_or_create_user {
@@ -252,6 +285,7 @@ sub _set_from_name {
                                        $value, $bug->{'product_id'});
     if ($id) {
         $bug->{$field . '_id'} = $id->[0];
+        $bug->{$field} = $value;
         # Get the value of this field. As a side effect, this creates the
         # internal Bugzilla::Product or Bugzilla::Component object. We need to
         # do this as create() requires it.
@@ -267,9 +301,15 @@ sub _set_from_name {
     }
 }
 
+# $bug_id can be undef or 0 for a new bug; $system and $ext_id are required.
 sub get_bug_for {
     my ($bug_id, $system, $ext_id) = @_;
 
+    if (!$ext_id) {
+        error("no_ext_id");
+        return;
+    }
+    
     my $new_bug = !$bug_id;
             
     # See if the external ID is already in use
@@ -280,9 +320,12 @@ sub get_bug_for {
                                            AND cf_sync_mode LIKE ?",
                                            undef, $ext_id, $system . '%');
     
-    if ($new_bug && $db_bug_id) {
+    if ($db_bug_id 
+        && ($new_bug 
+            || $db_bug_id != $bug_id)) 
+    {
         # We've received an update for an external issue whose external ID is
-        # marked on a bug we have, but they haven't sent us the relevant bug ID
+        # marked on a bug we have, but they haven't sent us the correct bug ID
         # of ours. Perhaps we weren't able to tell them yet? This is not a good
         # situation - but we certainly shouldn't create a new bug! Update the
         # old one with the data instead.
@@ -291,6 +334,24 @@ sub get_bug_for {
         
     # Get bug for $bug_id (even if there isn't one)
     my $bug = new Bugzilla::Bug($bug_id);
+
+    # We could be sent a bogus bug number which is nevertheless valid - e.g. 
+    # from a sync with another system. If so, we trust the external ID, create 
+    # a new bug and hope the remote system sorts itself out when we send the 
+    # new bug's ID.
+    if (!$new_bug) {
+        if ((!defined($bug->{'cf_refnumber'})
+            || $bug->{'cf_refnumber'} ne $ext_id))
+        {
+            warning("bad_bug_id", { 
+                bug_id => $bug_id,
+                ext_id => $ext_id
+            });
+            
+            $bug = new Bugzilla::Bug(0);
+            $new_bug = 1;
+        }
+    }
 
     if ($new_bug) {
         # $bug_id is blank. So we have created a new Bug object with a
@@ -302,23 +363,25 @@ sub get_bug_for {
         
         # Setting the status requires there to be an existing status, so we
         # hack one in. This makes $bug->set_status(...) just work.
-        $bug->{'bug_status'} = "NEW";
+        $bug->{'bug_status'} = "NEW";        
+    }
+    elsif ($bug->{'error'}) {
+        error('bad_bug_id', { 
+            bug_id => $bug_id,
+            ext_id => $ext_id,
+            msg    => $bug->{'error'},
+        });
         
+        return;
+    }
+
+    # Set reference number if a new bug or if this is the first sync update
+    # we've received.
+    if ((!defined($bug->{'cf_refnumber'})
+        || $bug->{'cf_refnumber'} eq ""))
+    {
         my $cf_rn_field = new Bugzilla::Field({ name => 'cf_refnumber' });
         $bug->set_custom_field($cf_rn_field, $ext_id);
-    }
-    else {
-        # Sanity check that $ext_id is what we expect
-        if (!defined($bug->{'cf_refnumber'}) ||
-            $ext_id ne $bug->{'cf_refnumber'}) 
-        {
-            error('mismatched_ids', { 
-                bug    => $bug,
-                ext_id => $ext_id || ""
-            });
-            
-            return;
-        }
     }
     
     return $bug;
@@ -353,6 +416,46 @@ sub get_default_component_owner {
     my $user = new Bugzilla::User($io_id);
 
     return $user;
+}
+
+# This method is used to bypass the status workflow, because making sure you
+# do every transition right is otherwise painful and prone to error.
+#
+# Be careful using this method; it bypasses all checks.
+# Statuses and resolutions are passed as text, not as an object.
+sub set_status_directly {
+    my ($bug, $status, $resolution) = @_;
+
+    my $old_status = $bug->status;
+    $bug->{'bug_status'} = $status;
+    delete $bug->{'status'};
+    delete $bug->{'statuses_available'};
+    delete $bug->{'choices'};
+
+    # Call this to fill in the internal field correctly
+    my $new_status = $bug->status;
+
+    if ($old_status->is_open && !$new_status->is_open)
+    {
+        $resolution ||= "INVALID";
+        $bug->set_resolution($resolution);
+    }
+    elsif ($new_status->is_open) {
+        $bug->clear_resolution();
+    }
+}
+
+sub is_bug_updated_in_db {
+    my ($bug, $timestamp) = @_;
+
+    my $delta_ts_dt = DateTime::Format::MySQL->parse_datetime($bug->delta_ts);
+    my $timestamp_dt = DateTime::Format::MySQL->parse_datetime($timestamp);
+    my $difference = $delta_ts_dt->subtract_datetime($timestamp_dt);
+
+    # Fudge :-| Not sure why there is sometimes a 1s difference
+    $difference = $difference->add(seconds => 1);
+
+    return !$difference->is_negative;
 }
 
 sub merge_hashrefs {
@@ -455,6 +558,13 @@ Data goes to $BUGZILLA_HOME/extensions/Sync/log.
 
 Returns a L<Bugzilla::User> object representing the owner of the given 
 component.
+
+=head2 set_status_directly
+
+Sets the status on a bug, bypassing all checks such as workflow. This is
+useful when you have to make the status a particular value, and don't want
+to worry about doing it via a series of legal transitions. But be careful,
+as no checks are done.
 
 =head1 LICENSE
 

@@ -109,7 +109,7 @@ sub map_bug_to_external {
                 # '---' is the default, non-removable value for custom fields.
                 # However, it usually isn't a valid value in the external
                 # system.
-                $value = "";
+                $value = undef;
             }
     
             $_ = $value;
@@ -156,7 +156,9 @@ sub map_external_to_bug {
             return;
         }
         
-        if ($bug->{'cf_sync_mode'} eq '---') {
+        if (!defined($bug->{'cf_sync_mode'}) ||
+            $bug->{'cf_sync_mode'} eq '---') 
+        {
             error('got_update_for_unsynced_bug', { 
                 bug_id => $bug->id,
                 ext_id => $ext_id
@@ -178,7 +180,7 @@ sub map_external_to_bug {
         # Get the field value to map.
         # Note: $value is not necessarily a scalar
         my $value = $ext->{$field};
-        
+
         # Some values are optional
         next if !defined($value);
         
@@ -282,8 +284,17 @@ sub map_external_to_bug {
         # because that's what create() wants.
         my $first_comment = shift(@added_comments);
         $bug->{'comment'} = $first_comment->{'thetext'};
-        $bug->{'commentprivacy'} = $first_comment->{'isprivate'};
-
+        
+        # Version check because name of param changed
+        Bugzilla::Constants::BUGZILLA_VERSION =~ /^(\d+\.\d+)/;
+        if ($1 > 4.0 || !defined($1)) {
+            $bug->{'comment_is_private'} = $first_comment->{'isprivate'};
+            $bug->{'comment_bug_when'} = $first_comment->{'bug_when'};
+        }
+        else {
+            $bug->{'commentprivacy'} = $first_comment->{'isprivate'};
+        }
+        
         # Version is compulsory in Bugzilla, but can't be set until product
         # and component are set (even if the value is present everywhere).
         # So we default it here.
@@ -300,19 +311,23 @@ sub map_external_to_bug {
         {
             delete $bug->{$field};
         }
-
+        
         # We use the shell bug as the params hash for the create call,
         # and get back a proper new bug, with an ID and everything.
         eval {
             $bug = Bugzilla::Bug->create($bug);
         };
         if ($@) {
-            error("cant_create_bug", { 'bug' => $bug });
-            next;
+            error("cant_create_bug", { 'bug' => $bug, 'msg' => $@ });
+            return;
         }
         
         # Insert comments from $bug beyond the first, if any
         if (scalar @added_comments) {
+            foreach my $comment (@added_comments) {
+                $comment->{'bug_id'} = $bug->id;
+            }
+            
             $bug->{'added_comments'} = \@added_comments;
         }
     }

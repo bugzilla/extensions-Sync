@@ -60,6 +60,17 @@ use constant REQUIRED_MODULES => [
         module  => 'XML::LibXML::XPathContext',
         version => 0,
     },
+    {
+        package => 'TheSchwartz',
+        module  => 'TheSchwartz',
+        version => "1.10",
+        feature => ['jobqueue'],
+    },
+    {
+        package => 'Test-Exception',
+        module  => 'Test::Exception',
+        version => 0,
+    },
 ];
 
 use constant OPTIONAL_MODULES => [

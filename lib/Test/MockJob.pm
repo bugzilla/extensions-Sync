@@ -39,6 +39,11 @@ sub completed {
     $self->{'exit_status'} = 0;
 }
 
+sub declined {
+    my ($self) = shift;
+    $self->{'was_declined'} = 1;
+    $self->{'exit_status'} = 0;
+}
 sub exit_status {
     my ($self) = shift;
     return $self->{'exit_status'};

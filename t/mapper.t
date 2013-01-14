@@ -67,7 +67,8 @@ sub test_map_bug_to_external {
 
     my $bug2 = new MockBug({ 
         is_first_sync => 0,
-        severity => 'notinlist'
+        severity => 'notinlist',
+        target_milestone => '---'
     });
 
     my $map;
@@ -85,7 +86,8 @@ sub test_map_bug_to_external {
                               "trivial" => "dull",
                               "_default" => "serious"
                           }
-                        )
+                        ),
+        "Key6"  => new S( field   => 'target_milestone' ),
     );
 
     # First bug
@@ -101,6 +103,7 @@ sub test_map_bug_to_external {
     my $ext2 = map_bug_to_external($bug2, $map);
 
     is($ext2->{'Key5'}, 'serious');
+    ok(!defined($ext2->{'Key6'}), '--- converted to undef and removed');
 
     # Errors
     my %errors_to_bad_maps = (

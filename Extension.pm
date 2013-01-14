@@ -26,8 +26,8 @@ use base qw(Bugzilla::Extension);
 use Bugzilla::Extension::Sync::Util;
 use Bugzilla::Extension::Sync::API qw(dispatch_sync_event);
 use Bugzilla::Constants;
-use Bugzilla::Util qw(lsearch);
 use Bugzilla::Error;
+use Bugzilla::BugMail;
 
 our $VERSION = '1.0';
 
@@ -57,13 +57,13 @@ sub install_update_db {
             name        => 'cf_refnumber',
             description => 'External Reference Number',
             type        => FIELD_TYPE_FREETEXT,
-            buglist     => 0
+            buglist     => 1
         },
         {
             name        => 'cf_sync_mode',
             description => 'Sync Mode',
             type        => FIELD_TYPE_SINGLE_SELECT,
-            buglist     => 0
+            buglist     => 1
         },
         {
             name        => 'cf_sync_data',
@@ -136,8 +136,7 @@ sub bug_end_of_update {
     
     # If any changes occurred...
     if (scalar(keys %$changes) 
-        || $bug->{added_comments}
-        || $bug->{'force_sync'})
+        || $bug->{'added_comments'})
     {
         my $is_first_sync = (defined($changes->{'cf_sync_mode'}) &&
                             $changes->{'cf_sync_mode'}->[0] eq '---' &&
@@ -149,6 +148,11 @@ sub bug_end_of_update {
             timestamp     => $args->{'timestamp'},
             is_first_sync => $is_first_sync,
         });
+        
+        # Trigger a bugmail send check. If this has already happened, it'll be
+        # a no-op, but if the change was triggered by incoming data, we need
+        # to send mail about it.
+        Bugzilla::BugMail::Send($bug->id);        
     }
 }
 
@@ -171,6 +175,11 @@ sub object_end_of_create {
         dispatch_sync_event('attachment_created',
                             $attachment->bug->sync_system(),
                             { attachment => $attachment });
+        
+        # Trigger a bugmail send check. If this has already happened, it'll be
+        # a no-op, but if the change was triggered by incoming data, we need
+        # to send mail about it.
+        Bugzilla::BugMail::Send($attachment->bug->id);
     }
 }
 
@@ -220,16 +229,6 @@ sub _bug_is_syncing {
     elsif (!Bugzilla->params->{'sync_enabled'}) {
         if (Bugzilla->params->{'sync_debug'}) {
             warn "Not syncing bug " . $self->id . " - sync globally disabled.";
-        }
-
-        return 0;
-    }
-    elsif (defined(Bugzilla->params->{$sync_system . '_sync_enabled'}) &&
-           !Bugzilla->params->{$sync_system . '_sync_enabled'}) 
-    {
-        if (Bugzilla->params->{'sync_debug'}) {
-            warn "Not syncing bug " . $self->id . 
-                 " - $sync_system sync disabled.";
         }
 
         return 0;
@@ -307,7 +306,7 @@ sub bug_check_can_change_field {
         }
     }
     
-    if (lsearch(\@syncuseremails, Bugzilla->user->email) == -1) {
+    if (!grep { $_ eq Bugzilla->user->email } @syncuseremails) {
         # Only 'syncers' are allowed to set sync state, and no-one can unset
         # it.
         if ($field eq 'cf_sync_mode') { 
@@ -456,8 +455,7 @@ teach the system how to get the original data back, and then a generic display
 system to display the data on a web page linked from that bug. So don't make
 this structure too complicated.
 
-You can either store the data directly as it was sent, or e.g. use 
-L<Storable> to C<freeze> and C<thaw> it.
+The data should be stored in a textual format, e.g. XML or JSON.
 
 =back
 

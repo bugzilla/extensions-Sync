@@ -1,0 +1,126 @@
+#!/usr/bin/perl -w
+
+use strict;
+use FindBin;
+use lib "lib";
+
+use TheSchwartz;
+use Bugzilla;
+use Bugzilla::JobQueue;
+use Data::Dumper;
+use TheSchwartz::Job;
+use Date::Format;
+use Sys::Hostname;
+
+my $dbh = Bugzilla->dbh;
+
+sub delete {
+    if ($ARGV[0]) {
+        if ($ARGV[0] eq "all") {
+			my $host = hostname();
+			if ($host !~ /tua1/) {
+				print "Deleting all jobs...\n";
+				$dbh->do("DELETE FROM ts_job");
+			}
+			else {
+				print "Multi-deletion not available on production system.\n";
+			}
+        }
+        else {
+			foreach my $jobid (@ARGV) {
+				$dbh->do("DELETE FROM ts_job WHERE jobid = ?", undef, $jobid);
+			}
+		}
+    }
+    else {
+        usage();
+    }    
+}
+
+sub list {
+    $Data::Dumper::Indent = 0;
+
+    my @jobnames = values %{ Bugzilla::JobQueue->job_map() };
+
+    my $queue = Bugzilla->job_queue();
+    my @jobs = $queue->list_jobs({
+        'funcname' => \@jobnames,
+        'limit'    => 5000
+    });
+
+    # Peeking into the internals a bit here...
+    foreach my $job (@jobs) {
+      my $cols = $job->{'column_values'};
+
+      # It's really not clear when this is supposed to be a Storable string and
+      # when it's not; it seems to vary from machine to machine. But hey, I'm
+      # peeking where I'm not supposed to be, so roll with it.
+      my $arg = eval { Storable::thaw($cols->{'arg'}) };
+      if ($@) {
+        # Not Storable...
+        $arg = $cols->{'arg'};
+      }
+
+      my $funcname = $job->funcname();
+      $funcname =~ s/^Bugzilla::Extension:://;
+      print sprintf("%6d", $cols->{'jobid'}) . " " . $funcname . "\n";
+      print "       " . time2str("%a %b %e %T %Y", $cols->{'run_after'});
+      if ($cols->{'grabbed_until'}) {
+        print " => " . time2str("%a %b %e %T %Y", $cols->{'grabbed_until'});
+      }
+
+      print "\n";
+      
+      my $struct = Dumper($arg);
+      $struct =~ s/^\$VAR1 = //;
+      $struct =~ s/;$//;
+      print "       " . $struct . "\n";
+    }    
+}
+
+sub retry {
+    if ($ARGV[0]) {
+        if ($ARGV[0] eq "all") {
+            $dbh->do("UPDATE ts_job SET run_after = 0");
+        }
+        else {
+			foreach my $jobid (@ARGV) {
+				$dbh->do("UPDATE ts_job SET run_after = 0 WHERE jobid = ?", 
+						 undef, $jobid);
+			}
+		}
+    }
+    else {
+        usage();
+    }        
+}
+
+sub usage {
+    print <<END;
+Usage: job <command> [<params>]
+
+Available commands:
+    delete <job IDs>
+    retry <job IDs>
+    list
+    
+<job IDs> is a list of numbers or "all".
+END
+}
+
+my %actions = ( 
+    delete => \&delete,
+    list   => \&list,
+    retry  => \&retry,
+);
+
+my $action = shift(@ARGV);
+
+if ($action && $actions{$action}) {
+    $actions{$action}->();
+}
+else {
+    usage();
+}
+
+exit(0);

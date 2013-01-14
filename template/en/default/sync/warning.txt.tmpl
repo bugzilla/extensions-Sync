@@ -19,45 +19,37 @@
 [%# Contributor(s):                                                         %]
 [%#   Written to the Glory of God by Gervase Markham <gerv@gerv.net>.       %]
 
-[% error_message = BLOCK %]
+[% warning_message = BLOCK %]
   [% IF    error == '' %]
   
-Coding error: no error tag specified.
+Coding error: no warning tag specified.
 
-  [% ELSIF error == 'test' %]
+  [% ELSIF error == 'bad_bug_id' %]
   
-Test error for debugging.
+Remote system sent external ID '[% ext_id %]' and bug ID '[% bug_id %]' but
+this bug is not marked as being synced with that external ID. So, a new bug 
+has been created for this external ID.
+
+  [% ELSIF error == 'bug_not_updated' %]
+
+SendUpdate executed for bug [% bug.id %] (sync mode '[% bug.cf_sync_mode %]')
+but database not yet updated. Deferring.
+
+Bug timestamp in DB: [% bug.delta_ts %]
+Timestamp of change: [% timestamp %]
 
   [% ELSE %]
-
     [%# Try to find hooked error messages %]
-    [% error_message = Hook.process("errors") %]
+    [% warning_message = Hook.process("warnings") %]
 
-    [% IF not error_message %]
-      No error message specified for error tag [% error %].
+    [% IF not warning_message %]
+      No warning message specified for warning tag [% error %].
       Please send email to [% Param("maintainer") %] describing the steps taken
       to obtain this message.
     [% ELSE %]
-      [% error_message FILTER none %]
+      [% warning_message FILTER none %]
     [% END %]
   [% END %]
-Error message was: [% response.status_line %].
 [% END %]
 
-
-[% action_message = BLOCK %]
-  [% IF fatal %]
-
-No retries left. Giving up.
-
-  [% ELSIF NOT completed %]
-
-This has now failed [% job.failures + 1 %] time(s). I will retry.
-
-  [% END %]
-[% END %]
-
-[% error_message FILTER trim %]
-
-[%+ action_message FILTER trim +%]
-
+[% warning_message FILTER trim %]
